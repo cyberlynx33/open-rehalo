@@ -22,6 +22,8 @@ public enum RideTrace {
         public var volume: UInt8
         public var cards: UInt16
         public var appVersion: String
+        /// `matched` for the matched engine; absent for the classic one (and older traces).
+        public var engine: String?
 
         public struct Instruction: Equatable, Sendable, Codable {
             public var lat: Double
@@ -50,6 +52,7 @@ public enum RideTrace {
             volume = settings.volume
             cards = settings.carouselCards
             self.appVersion = appVersion
+            self.engine = engine.engine == .matched ? RideEngine.Engine.matched.rawValue : nil
         }
     }
 
@@ -131,13 +134,53 @@ public enum RideTrace {
         public var ring: Ring?
         public var cmds: [Command]
         public var arrived: Bool
+        /// Matched engine: what the route matcher made of the fix.
+        public var match: Match?
+        /// Something the rider did, on a line of its own (no fix): `invert`, `ignoreWrongWay`.
+        public var event: String?
 
-        public init(fix: RideFix?, engine: RideEngine, commands: [NavCommand], arrived: Bool = false) {
+        public init(fix: RideFix?, engine: RideEngine, commands: [NavCommand], arrived: Bool = false,
+                    event: String? = nil) {
             self.fix = fix
             screen = engine.snapshot
             ring = Ring(engine.director)
             cmds = commands.map(Command.init)
             self.arrived = arrived
+            match = Match(engine.matcher)
+            self.event = event
+        }
+    }
+
+    /// Matched engine: the matcher's view of one fix (docs/MAP_MATCHING_SPEC.md §10).
+    public struct Match: Equatable, Sendable, Codable {
+        public var status: String
+        public var along: Double?
+        public var distance: Double?
+        /// Metres to the nearest point of the route anywhere.
+        public var toRoute: Double?
+        public var confident: Bool
+        public var joined: Bool
+        /// The three best candidates as `[along, distance, p]`.
+        public var candidates: [[Double]]
+        /// The rider's direction of travel, degrees.
+        public var travel: Double?
+        public var wrongWay: String
+        public var coverage: Double
+        public var arrived: Bool
+
+        public init?(_ matcher: RouteMatcher?) {
+            guard let r = matcher?.last else { return nil }
+            status = r.status.rawValue
+            along = r.best?.along
+            distance = r.best?.distance
+            toRoute = r.distanceToRoute.isFinite ? r.distanceToRoute : nil
+            confident = r.confident
+            joined = r.joined
+            candidates = r.candidates.prefix(3).map { [$0.along, $0.distance, $0.p] }
+            travel = r.travel?.bearing
+            wrongWay = r.wrongWay.rawValue
+            coverage = r.coverage
+            arrived = r.arrived
         }
     }
 

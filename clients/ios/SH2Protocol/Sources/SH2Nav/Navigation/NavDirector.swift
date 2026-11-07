@@ -69,6 +69,13 @@ public struct NavDirector: Sendable {
     /// What the last fix asked for and `update` has already consumed: for the ride trace.
     public private(set) var lastSound = NavSoundStatus.none
     public private(set) var lastRemoved: [NavAnimation] = []
+    /// Addition (matched engine): where each step's manoeuvre is along the route
+    /// (docs/MAP_MATCHING_SPEC.md §6.1).
+    public private(set) var stepAlong: [Double]?
+    /// Addition: the ring shows the wrong-way U-turn on top of the guidance (§9.1).
+    public private(set) var wrongWayShown = false
+    /// The OLED text of the wrong-way U-turn (English, like the official texts).
+    public static let wrongWayText = "Turn around"
 
     /// `points` = the GPX selection of `NavStepFactory.points(waypoints:trackPoints:)`.
     /// `title` = the destination's name (intro, arrival, destination arcs).
@@ -147,6 +154,19 @@ public struct NavDirector: Sendable {
     /// `SHDirectionService.onNewLocation` for a GPX ride. `fix.accuracy` = rounded horizontal
     /// accuracy in metres.
     public mutating func update(_ fix: NavLocation) -> Result {
+        update(fix, match: nil)
+    }
+
+    /// Addition (matched engine): use the matcher for where the rider is. Call before the first fix.
+    public mutating func enableMatching(stepAlong: [Double]) {
+        self.stepAlong = stepAlong
+        guidance?.enableMatching(stepAlong: stepAlong)
+    }
+
+    /// One fix. With a `match` (matched engine, docs/MAP_MATCHING_SPEC.md §6–§9) the matcher decides
+    /// on/off the route, the step and arrival, and `wrongWay` puts the U-turn on the ring; without one,
+    /// exactly the official flow.
+    public mutating func update(_ fix: NavLocation, match: NavMatch?, wrongWay: Bool = false) -> Result {
         var result = Result()
         guard !completed else { return result }
         if guidance == nil {
@@ -154,12 +174,13 @@ public struct NavDirector: Sendable {
             var g = NavGuidance(start: fix, steps: steps)
             g.isNavigating = true
             if startAtNearestStep { g.joinNearestStretch(fix) }
+            if match != nil, let stepAlong { g.enableMatching(stepAlong: stepAlong) }
             guidance = g
             currentLocation = fix
         }
         guard var g = guidance else { return result }
 
-        g.update(fix)
+        if let match { g.update(fix, match: match) } else { g.update(fix) }
         // The Navigation card that `stopNavCommand` refreshes is read from the guidance after this fix,
         // as the original reads the library's display status after `updateState`: the next turn, not
         // the one just completed.
@@ -186,11 +207,17 @@ public struct NavDirector: Sendable {
             result.commands += gpsCompassResults(ds, g)
         } else {
             result.commands += stepByStepResults(ds, sound, g)
-            if g.isComplete { result.commands += navigationCompleted(); result.arrived = true }
+            if match == nil, g.isComplete { result.commands += navigationCompleted(); result.arrived = true }
         }
         guidance?.sound = .none
 
-        if !completed, g.hasReachedOrigin, g.hasArrived(at: fix) {
+        if let match {
+            if !completed, match.arrived {
+                result.commands += navigationCompleted()
+                result.arrived = true
+            }
+            result.commands = wrongWayLayer(result.commands, wrongWay: wrongWay && !completed)
+        } else if !completed, g.hasReachedOrigin, g.hasArrived(at: fix) {
             result.commands += navigationCompleted()
             result.arrived = true
         }
@@ -198,8 +225,47 @@ public struct NavDirector: Sendable {
         return result
     }
 
+    /// Addition: the wrong-way U-turn, drawn over whatever the guidance shows (§9.1). On entry the ring
+    /// is cleared, the glyph drawn and a sound played; while it lasts the guidance's commands are
+    /// dropped and the glyph re-sent each fix; on exit `navOff`, and the guidance takes over again.
+    mutating func wrongWayLayer(_ commands: [NavCommand], wrongWay: Bool) -> [NavCommand] {
+        if wrongWay {
+            let glyph = NavCommand(data: Commands.nav(stepType: UInt8(NavStepType.uTurn), progress: 100, distance: 0,
+                                                      text: Self.wrongWayText, metric: settings.metric,
+                                                      colour: Commands.NavColour.warning),
+                                   label: "nav")
+            if wrongWayShown { return [glyph] }
+            wrongWayShown = true
+            var cmds = stopNavCommand() + [glyph]
+            if settings.soundOn {
+                cmds.append(NavCommand(data: Commands.soundPlay(volume: settings.volume, track: Commands.NavSound.wrongWay),
+                                       label: "sound"))
+            }
+            return cmds
+        }
+        guard wrongWayShown else { return commands }
+        wrongWayShown = false
+        return [NavCommand(data: Commands.navOff(), label: "navOff")] + commands
+    }
+
+    /// Addition: what clears the ring (the route is about to change under it).
+    public func clearRing() -> [NavCommand] { stopNavCommand() }
+
+    /// Addition: a director for the same ride on another route (an inverted one): the same title,
+    /// settings and carousel state, no intro to show.
+    public func continuing(on points: [NavLocation]) -> NavDirector {
+        var d = NavDirector(points: points, title: title, settings: settings)
+        d.carouselOnNavigation = carouselOnNavigation
+        return d
+    }
+
     /// The ring switched to its Navigation card: answer with the card's content.
     public func carouselCard() -> NavCommand {
+        if wrongWayShown {
+            return NavCommand(data: Commands.carouselNavigationCard(mask: carouselMask, distance: 0, angle: 180,
+                                                                    text: Self.wrongWayText, metric: settings.metric),
+                              label: "carousel")
+        }
         guard let ds = guidance?.display else {
             return NavCommand(data: Commands.carouselNavigationCard(mask: carouselMask), label: "carousel")
         }
