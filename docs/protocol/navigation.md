@@ -193,7 +193,7 @@ affect a destination with a route (§7). Limits kept on purpose, to behave like 
 | Riding it backwards | Detected late, on leaving the current stretch |
 | Roundabouts in GPX mode | No useful indication |
 
-A planned "matched" engine, [`MAP_MATCHING_SPEC.md`](../MAP_MATCHING_SPEC.md), lifts four of these limits
+The "matched" engine, [`MAP_MATCHING_SPEC.md`](../MAP_MATCHING_SPEC.md) (the default), lifts four of these limits
 (the step that only moves forward, no off-route warning without a heading, the arrival guard, and riding
 it backwards), adds a wrong-way warning, and keeps this behaviour available as the "classic" engine.
 

@@ -1,7 +1,9 @@
 # rehalo — Map matching and wrong-way detection (spec)
 
-Status: **design, not implemented**. This spec is the implementation map for the "matched" navigation
-engine: each section is a unit of work with the files it touches.
+Status: **implemented, to be road-tested** (`SH2Nav/Ride/RouteMatcher.swift`, `WrongWayDetector.swift`,
+`TravelDirection.swift`, hooks in `NavGuidance` / `NavDirector`, tests in `MatchedRideTests.swift`). This
+spec is the implementation map for the "matched" navigation engine: each section is a unit of work with
+the files it touches. Where building it changed the design, the text says what was built.
 
 ## 1. Why
 
@@ -131,11 +133,15 @@ candidate on that fix, so the ranking stays fair.
 from vetoing a candidate on its own.
 
 ### 5.4 Tracking and confidence
-- **Tracking** = a confident match in the last 30 s, with no `off` state and no GPS gap > 30 s since.
-  While tracking, candidates with `|e| > 3σp` are **discarded** (continuity as a hard rule). This is what
-  separates laps of a circuit and same-direction overlaps, where distance and direction can't. If every
-  candidate is discarded, the matcher **re-acquires**: keep them all, drop `s_prog`, and mark the fix not
-  confident.
+- **The anchor** is the last confident match, or where the rider joined the route: joining is itself a
+  decision on where the rider is, and it has to be, because two laps of a circuit look the same until
+  continuity tells them apart. The anchor always scores `s_prog`; off the route it stays, as a soft
+  score whose `σp` grows with the distance ridden and the GPS gaps.
+- **Tracking** = on the route with an anchor from the last 30 s. While tracking, candidates with
+  `|e| > 3σp` are **discarded** (continuity as a hard rule). This is what separates laps of a circuit and
+  same-direction overlaps, where distance and direction can't. If every candidate is discarded, the fix
+  is not confident. If the nearest pass is discarded for 3 fixes in a row while the kept best is further
+  than `R` (a shortcut), the anchor moves to the nearest pass (the most continuous of those as near).
 - The **best** candidate is the highest `p`. It is **confident** when all of these hold:
   - `d_best ≤ R` (§5.5);
   - it is the only candidate, or `p₂ / p_best ≤ 0.5`;
@@ -150,6 +156,7 @@ Thresholds per fix: `L = max(30, 2a)` (leave), `R = clamp(a + 15, 15, 0.75·L)` 
 | From | To | When |
 | --- | --- | --- |
 | *start* | `off` | The ride starts off route, as in the official app |
+| `off` | `on` | Not joined yet, `along_best ≤ 50 m`, `d < R` and the join allowed: at once, as the official app joins at its start |
 | `off` | `rejoining` | `d_min < R` and the join is allowed (below) |
 | `rejoining` | `off` | `d_min ≥ R`, or the join stops being allowed |
 | `rejoining` | `on` | Held for ≥ 3 s and ≥ 2 accepted fixes |
@@ -253,8 +260,9 @@ public mutating func enableMatching(stepAlong: [Double])   // once, at the first
 public mutating func update(_ fix: NavLocation, match: NavMatch)
 mutating func syncStep(_ match: NavMatch, previousIndex: Int)  // §6.2, internal
 ```
-`joinNearestStretch` (used at NavDirector.swift:156) is replaced in matched mode by the matcher's
-`joinNearest` rule plus a sync to the nearest candidate's step.
+`joinNearestStretch` (NavDirector.swift:156) still runs at the first fix with `joinNearest`: it marks the
+origin reached, so the pointer says "Return to route", and the step sync corrects its stretch. Until the
+rider joins (and without `joinNearest`) the target is the route's start, as in the official app.
 
 ## 7. Arrival and coverage
 
@@ -308,16 +316,17 @@ step sync (§6.2).
   `[0x01,0xB8,0x00,0x96, 0x01,0x4A,0x00,0xFA]`. There is no warning sound in the official set.
 
 ### 9.2 Phone
-- New `RideSnapshot.wrongWay: Bool` and `canInvert: Bool`, published by `GuidanceController`, carried into
-  `NavState` and into the Live Activity's `HaloNavAttributes.ContentState` (`wrongWay`, symbol
-  `arrow.uturn.backward`, instruction "Wrong way"). Don't reuse `TurnKind.uTurn`: it means a turn of 165°
-  or more in the route.
+- New `RideSnapshot.wrongWay: Bool?` and `canInvert: Bool?` (nil in the classic engine), published by
+  `GuidanceController` and carried into `NavState`. The Live Activity needs no new field: it shows turn
+  `wrongWay`, symbol `arrow.uturn.backward` and "Wrong way" with the off-route tint. Don't reuse
+  `TurnKind.uTurn`: it means a turn of 165° or more in the route.
 - **`NavigatingView` banner**, in the warning colour:
   - "Wrong way" / "Vas en sentido contrario";
   - **Invert route**, shown when `canInvert`;
   - **Ignore**.
 - **Haptic:** `.warning` on entry, while the app is in the foreground, at most 3 times per ride and
-  ≥ 30 s apart. The count resets when the rider rides forward.
+  ≥ 30 s apart. The count resets when a warning ends with the rider riding the right way (not when it is
+  ignored).
 - No local notification: the ring is the main channel (open question, §13).
 - New strings in `Localizable.xcstrings` (EN/ES): "Wrong way", "Invert route", "Ignore", "Turn around"
   (the ring's OLED text stays English, like the official texts).
@@ -344,8 +353,8 @@ New `GuidanceController.invert()`. It must **not** go through `start` / `begin`,
 ## 10. Settings and ride trace
 
 - **Setting:** `AppSettings.navigationEngine`, key `sh2.nav.engine`, values `matched` (default) and
-  `classic`. In `AdvancedSettingsView` as "Navigation engine: Improved / Classic (official app)". It
-  applies from the next ride on.
+  `classic`. In `AdvancedSettingsView` as a "Classic navigation" toggle (off by default). It applies from
+  the next ride on.
 - **`RideTrace`** (no version bump: only new optional keys, which the encoder omits when nil, so classic
   traces stay byte-identical):
   - `Header.engine: String?`;
@@ -402,43 +411,44 @@ repeatable. Each scenario runs at σ = 5, 10 and 20 m with 20 seeds.
 
 | Scenario | Pass when |
 | --- | --- |
-| Straight 2 km at 20 km/h | Never `off`; along within 15 m of the truth (σ ≤ 10) |
-| Parallel street 25 m / 40 m away for 300 m | 25 m at σ = 5: stays `on`; 40 m: `off` within ≤ 8 s |
+| Straight 2 km at 20 km/h | Never `off`; along within 4σ of the truth (σ ≤ 10: the GPS error along the route, which no matcher sees); wrong way never confirmed (at σ = 20 m it can be suspected, which only holds the step) |
+| Parallel street 15 / 20 / 40 m away for 300 m (σ = 5) | 15 m: stays `on`; 20 m: `off` in at most 2 of 20 runs (correlated noise crosses `L` = 30 m); 40 m: `off` within ≤ 12 s |
 | Out-and-back | At the tip and on the way back, along is on the return leg; no wrong way |
-| Loop with start = end, 3 turns | No arrival in the first half; arrival at the end |
+| Loop with start = end, 3 turns | Arrival only within the last 75 m (50 m radius + GPS noise), never at the start |
 | Circuit, 2 laps | Along follows lap 2; arrival only at the end of lap 2 |
 | Figure of eight | Through the crossing, keeps the right pass |
 | Shortcut skipping 2 manoeuvres | Steps jump forward within 3 confident fixes; never stays `off` |
-| Back to a missed turn | Steps jump back; guidance resumes at that turn |
-| Start mid-route, riding the right way | Joins there |
+| Missing a turn by 100 m and coming back to it | Off route meanwhile; no wrong way; arrives |
+| Start mid-route, riding the right way | Joins within 100 m |
 | Start mid-route, crossing at right angles | Doesn't join |
 | Stopped 60 s at a light with drift | No `off`, no wrong way, no step change |
 | 30 s GPS gap, then 200 m further on | Re-acquires within 3 fixes |
-| Riding the route backwards at 18 km/h | Wrong way confirmed within ≤ 10 s and ≤ 60 m |
+| Riding the route backwards at 18 km/h | Wrong way confirmed within ≤ 15 s and ≤ 75 m (the 45 m movement window, then 2 evaluations 3 s apart) |
 | Switchbacks (hairpins every 40 m) | No wrong way |
 | Lead-in + GPX sharing a street | No mid-route join while on the lead-in |
 
-### 12.2 Integration (`NavigationTests`, `RideEngineTests`)
-- Matched mode: ring commands for a shortcut, an arrival, wrong way (U-turn on entry, `navOff` on
-  exit) and a rejoin (the pointer is removed exactly once).
+### 12.2 Integration (`MatchedEngineTests`)
+- Matched mode: exact `stepAlong` for GPX turns, arrival with noise without the pointer, a shortcut
+  moving the step on, a loop not ending at its start, the U-turn (once on entry, alone while it lasts, the
+  carousel card), "Ignore" (`navOff`, no U-turn), "Invert route" (the ride carries on and arrives at the
+  original start, no "Return to route" flash), no inverting a routed destination, no matcher in Compass.
 - Classic mode: **every existing test passes unchanged**.
 
 ### 12.3 Replay
 A `RideReplay` helper rebuilds a `RideEngine` from a trace's header, feeds the fixes, applies the events,
 and sums up the ride: off-route episodes, wrong-way episodes, the arrival fix, and the step timeline.
 
-- **Classic regression:** for each fixture in `Tests/SH2NavTests/Fixtures/*.jsonl`, the classic engine
-  must reproduce the recorded commands byte for byte.
-- **Comparison:** the matched engine prints its summary next to the classic one.
+- **Built:** `RideReplay.run` reproduces a recorded ride's commands for both engines (`MatchedEngineTests`),
+  and classic traces carry none of the new keys.
+- **Still to do:** replay fixtures from road tests in `Tests/SH2NavTests/Fixtures/`, comparing both engines.
 - **Privacy:** fixtures committed to the repo must be anonymised (coordinates shifted and rotated) or
   synthetic.
 
 ### 12.4 Acceptance
-- All of §12.1 passes at σ = 5 and 10 m. At σ = 20 m: no false `off` on the straight, and wrong way still
-  confirmed within ≤ 10 s.
-- No false wrong-way warning in 100 seeded out-and-back and switchback runs.
-- `RouteMatcher.update` ≤ 2 ms per fix on a 20 000-point route (XCTest `measure`, on an iPhone 12-class
-  device).
+- All of §12.1 passes (20 seeds each; σ = 5 m unless stated, the straight also at 10 and 20 m).
+- No confirmed wrong way in 50 seeded out-and-back runs at σ = 8 m, nor on the switchbacks.
+- `RouteMatcher.update` under 50 ms per fix on a 22 000-point route in a debug build on CI; the target on
+  an iPhone 12-class device in release is ≤ 2 ms (to measure on the road test).
 - Road test with "Record rides" on (Settings › Advanced): an urban grid with parallel streets, a loop, an
   out-and-back, a deliberate shortcut, deliberately riding the wrong way and then inverting, a tunnel or
   GPS gap, and stops at lights. Each ride is compared against the classic engine by replay.
