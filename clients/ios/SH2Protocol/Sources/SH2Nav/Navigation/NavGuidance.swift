@@ -368,6 +368,7 @@ public struct NavGuidance: Sendable {
         if k == cur { pendingStep = nil; return }
         if offThePath {                             // so the arcs back onto the route aim ahead
             pendingStep = nil
+            if k < cur && match.along >= stepAlong[cur] - Self.behindMargin { return }   // noise at a corner
             jumpToStep(k)
             return
         }

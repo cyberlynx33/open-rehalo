@@ -93,6 +93,7 @@ public struct WrongWayDetector: Sendable {
         }
         guard input.onRoute else {                  // off the route: the pointer takes over
             end()
+            history.removeAll()                     // back on it, along starts over from there
             return
         }
         if state != .none {

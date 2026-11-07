@@ -156,7 +156,7 @@ Thresholds per fix: `L = max(30, 2a)` (leave), `R = clamp(a + 15, 15, 0.75·L)` 
 | From | To | When |
 | --- | --- | --- |
 | *start* | `off` | The ride starts off route, as in the official app |
-| `off` | `on` | Not joined yet, `along_best ≤ 50 m`, `d < R` and the join allowed: at once, as the official app joins at its start |
+| `off` | `on` | Not joined yet, `along_best ≤ 50 m`, `d < R` and the join allowed: at once, as the official app joins at its start. Until the first join, a candidate within the start window and `R` is taken as the best even where another pass is as near (a loop's end meets its start) |
 | `off` | `rejoining` | `d_min < R` and the join is allowed (below) |
 | `rejoining` | `off` | `d_min ≥ R`, or the join stops being allowed |
 | `rejoining` | `on` | Held for ≥ 3 s and ≥ 2 accepted fixes |
@@ -169,11 +169,18 @@ Thresholds per fix: `L = max(30, 2a)` (leave), `R = clamp(a + 15, 15, 0.75·L)` 
 **When a join is allowed:**
 - *Direction*, when the travel direction is valid: `s_dir(best) ≥ 0.7`, meaning the rider rides along the
   route. Crossing it at right angles never joins. A rider who rides along it the wrong way (`s_dir ≤ 0.25`
-  for ≥ 5 s) also joins, and the wrong-way detector takes over (§8).
+  for ≥ 5 s) also joins, and the wrong-way detector takes over (§8). A fix with no direction (noise, a
+  stop) keeps the reversal's clock running; riding along the route or across it resets it.
 - *Before the route has been reached* (`hasReachedOrigin` false), one of these must also hold:
   - `along_best ≤ 50 m` (at the start);
   - `joinNearest` ("Start at the nearest point");
   - the direction rule above held on the last 2 fixes (joining mid-route, as Komoot does).
+
+  Riding it backwards joins before the route has been reached only when the ride **began at its end**
+  (a candidate with `along ≥ length − 50 m` within `R` before the rider had moved 50 m), or with
+  `joinNearest`. That covers a loop ridden the other way round and a route loaded the wrong way: the
+  warning offers to invert it. A rider who reaches the start along the first stretch the other way doesn't
+  join (no warning): they turn round at the start.
 - *While on a lead-in:* joining mid-route is disabled until `along ≥ leadInLength`. Apple's lead-in often
   ends on a street the GPX uses again later.
 
@@ -220,7 +227,7 @@ index **as it was when the fix started**. Let `k = max{ i : stepAlong[i] ≤ alo
 | `k == cur + 1`, less than 30 m past `stepAlong[k]` | Let the official completion run, so the "turn now" animation plays |
 | `k == cur + 1`, 30 m or more past | Forced `processStepComplete(next)` |
 | Any other `k` (2 or more ahead, or behind) | After **3 consecutive confident fixes** with the same `k` (behind also needs `along < stepAlong[cur] − 30 m`, so a wobble at a red light just past a corner doesn't flip it): **jump** |
-| Off route (`offThePath`) | Set the index at once, so the arcs that turn the rider onto the route aim ahead, not behind |
+| Off route (`offThePath`) | Set the index at once, so the arcs that turn the rider onto the route aim ahead, not behind. Behind only past the same 30 m: coming back to a missed corner, GPS noise either side of it would flip the step back and forth |
 
 A **jump** does all of the following:
 - sets `currentStepIndex = k`;
@@ -272,6 +279,10 @@ rider joins (and without `joinNearest`) the target is the route's start, as in t
 - **Arrival:** `on`, confident, `length − along ≤ 50 m` (the official radius is ~50.5 m), and coverage
   ≥ 10 % of `length − joinAlong`, where `joinAlong` is where the rider first joined. A rider who joined
   near the end can still arrive.
+- **On a loop** (its end within 50 m of its start), coverage ≥ **50 % of the whole loop**. A rider who
+  sets off on the loop's last stretch rides it towards the start, joins it there (aligned) and would
+  otherwise "arrive" at the start: with 10 % of what was left, after 19 s in the simulation (§12.5). Past
+  the start, continuity re-anchors on the loop's first stretch and the steps jump back to 0.
 - In matched mode this replaces **both** of the director's arrival paths: `g.isComplete` at
   NavDirector.swift:189 and `g.hasArrived` at :193. The arrival commands (`navigationCompleted`) don't change.
 
@@ -289,7 +300,8 @@ rider joins (and without `joinNearest`) the target is the route's start, as in t
 - **Suspected:** `c ≤ −0.5`, and no candidate within `L` has `c ≥ 0.5`. On an out-and-back the matcher
   switches to the other leg, which isn't wrong way.
 - **Confirmed:** suspected, and `along_best` dropped by at least 0.5 × the odometer over the last ≥ 40 m,
-  on 2 evaluations ≥ 3 s apart.
+  on 2 evaluations ≥ 3 s apart. The (odometer, along) history only holds fixes on the route since the
+  rider last joined it: going off route clears it.
 - **Ends when any of these happens:**
   - `c ≥ 0.4` on 2 fixes (or the GPS course agrees with the route at ≥ 2 m/s);
   - `along` rises by 30 m;
@@ -388,12 +400,12 @@ All are constants in one `RouteMatcher.Parameters` struct, to be tuned with reco
 | Leave persistence | 5 s, or > 2L on 2 fixes | §5.5 |
 | Rejoin persistence | 3 s and 2 fixes | §5.5 |
 | Join direction | s_dir ≥ 0.7 (anywhere: ≥ 0.75 on 2 fixes); wrong-way join ≤ 0.25 for 5 s | §5.5 |
-| Start window | along ≤ 50 m | §5.5 |
+| Start window (and end window for a ride that began at the end) | along ≤ 50 m (≥ length − 50 m) | §5.5 |
 | `stepAlong` projection tolerance | 25 m | §6.1 |
 | Forced completion past the manoeuvre | 30 m | §6.2 |
 | Jump confirmation | 3 confident fixes; behind: 30 m | §6.2 |
 | Official completion gate | along ≥ stepAlong − 5 m | §6.2 |
-| Arrival | ≤ 50 m left along the route, coverage ≥ 10 % | §7 |
+| Arrival | ≤ 50 m left along the route, coverage ≥ 10 % (loop: ≥ 50 % of all of it) | §7 |
 | Coverage gap / direction | ≤ 100 m / s_dir ≥ 0.5 | §7 |
 | Wrong way: start / speed | 20 s / ≥ 1 m/s | §8 |
 | Wrong way: window | 40 m + mean accuracy (≥ 20 m + accuracy) | §8 |
@@ -415,10 +427,14 @@ repeatable. Each scenario runs at σ = 5, 10 and 20 m with 20 seeds.
 | Parallel street 15 / 20 / 40 m away for 300 m (σ = 5) | 15 m: stays `on`; 20 m: `off` in at most 2 of 20 runs (correlated noise crosses `L` = 30 m); 40 m: `off` within ≤ 12 s |
 | Out-and-back | At the tip and on the way back, along is on the return leg; no wrong way |
 | Loop with start = end, 3 turns | Arrival only within the last 75 m (50 m radius + GPS noise), never at the start |
+| Loop set off on 300 m (15 %) before its end, on past the start | Never arrives; along back on the loop's start |
+| Loop ridden backwards from its start (iPhone course on) | Warned within 200 m; inverted, arrives back at the start |
+| Route ridden from its end (loaded the wrong way) | Wrong way confirmed within 150 m |
+| Reaching the start backwards along the first stretch, then setting off | No wrong way at all; on route |
 | Circuit, 2 laps | Along follows lap 2; arrival only at the end of lap 2 |
 | Figure of eight | Through the crossing, keeps the right pass |
 | Shortcut skipping 2 manoeuvres | Steps jump forward within 3 confident fixes; never stays `off` |
-| Missing a turn by 100 m and coming back to it | Off route meanwhile; no wrong way; arrives |
+| Missing a turn by 100 m and coming back to it | Off route meanwhile; no wrong way; arrives; the step never goes back (40 seeds) |
 | Start mid-route, riding the right way | Joins within 100 m |
 | Start mid-route, crossing at right angles | Doesn't join |
 | Stopped 60 s at a light with drift | No `off`, no wrong way, no step change |
@@ -452,6 +468,20 @@ and sums up the ride: off-route episodes, wrong-way episodes, the arrival fix, a
 - Road test with "Record rides" on (Settings › Advanced): an urban grid with parallel streets, a loop, an
   out-and-back, a deliberate shortcut, deliberately riding the wrong way and then inverting, a tunnel or
   GPS gap, and stops at lights. Each ride is compared against the classic engine by replay.
+
+### 12.5 Simulation on the demo route
+A scripted rider on the app's demo route (`DemoRoute.gpx`, an 8.3 km loop in the Eixample grid), both
+engines side by side, 20 seeds each, AR(1) GPS noise (σ 5 m, 14 m in an urban canyon) with the iPhone's
+course and speed. Results after the fixes this simulation led to (loop arrival, joining at the start of
+a loop, riding a route from its end, the step at a missed corner):
+
+| Scenario | Classic | Matched |
+| --- | --- | --- |
+| Demo-mode rider (perfect GPS) | Arrives 49 m before the end, 220 ring commands | Identical, command for command |
+| Full ride: approach, lights, urban canyon, roundabout, a missed turn, a 35 s GPS gap, a 1.15 km detour on parallel streets, 250 m the wrong way, arrival | Arrives 20/20; 35 false "off route" (urban canyon); no wrong-way warning | Arrives 20/20; 0 false "off route"; real exits flagged 4 s (p90 6 s) after passing 30 m, back on 7 s (p90 9 s) after getting within 15 m; wrong way warned in all 20, after 9–10 s / ~50 m |
+| Loop ridden backwards from its start, "Invert route" 3 s after the warning | Off route the whole loop; never arrives | Warned after 23–25 s (~140 m); arrives 20/20 |
+| Setting off 150 m before the loop's end | No early arrival | No early arrival (was 20/20 arriving after 19 s) |
+| 3.3 km linear route ridden from its end, inverted | Off route; never arrives | Warned after 23 s; arrives 20/20 |
 
 ## 13. Out of scope and open questions
 

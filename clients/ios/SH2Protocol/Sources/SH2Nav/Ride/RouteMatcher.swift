@@ -55,6 +55,9 @@ public struct RouteMatcher: Sendable {
         public var coverageDirection = 0.5
         public var arrivalRadius = 50.0
         public var arrivalCoverage = 0.10
+        /// On a loop (its end within `startWindow` of its start), the share of the whole loop: a rider
+        /// who sets off on the loop's last stretch, heading for its start, hasn't finished it.
+        public var loopArrivalCoverage = 0.5
         public init() {}
     }
 
@@ -95,7 +98,8 @@ public struct RouteMatcher: Sendable {
         /// Metres to the nearest point of the route anywhere.
         public var distanceToRoute = Double.infinity
         public var travel: TravelDirection.Estimate?
-        /// Share of the route (from where the rider joined it) ridden the right way, 0…1.
+        /// Share of the route (from where the rider joined it; on a loop, of all of it) ridden the right
+        /// way, 0…1.
         public var coverage = 0.0
         public var arrived = false
         /// The rider has been on the route.
@@ -111,6 +115,8 @@ public struct RouteMatcher: Sendable {
     public let leadInLength: Double
     /// "Start at the nearest point": join anywhere, and lead there.
     public let joinNearest: Bool
+    /// The route ends where it starts.
+    let isLoop: Bool
 
     public private(set) var last = Result()
     public private(set) var wrongWay: WrongWayDetector
@@ -143,6 +149,8 @@ public struct RouteMatcher: Sendable {
     var travel = TravelDirection()
     var alignedStreak = 0
     var reversedSince: Double?
+    /// The ride began at the route's end (within `startWindow` of it, before moving `startWindow`).
+    var beganAtEnd = false
     var covered: [ClosedRange<Double>] = []
     var coverFrom: Double?
     var startTime: Double?
@@ -153,6 +161,8 @@ public struct RouteMatcher: Sendable {
         self.parameters = parameters
         self.leadInLength = leadInLength
         self.joinNearest = joinNearest
+        isLoop = route.points.count > 1
+            && route.points[0].distance(to: route.points[route.points.count - 1]) <= parameters.startWindow
         wrongWay = WrongWayDetector()
     }
 
@@ -223,6 +233,10 @@ public struct RouteMatcher: Sendable {
         // route and recent.
         var all = candidates(near: here)
         let dMin = all.first?.distance ?? .infinity
+        if !joined, odometer <= parameters.startWindow,
+           all.contains(where: { $0.along >= route.length - parameters.startWindow && $0.distance < rejoin }) {
+            beganAtEnd = true
+        }
         score(&all, heading, a, anchor: anchor)
         var cands = all
         var gateFailed = false
@@ -249,8 +263,13 @@ public struct RouteMatcher: Sendable {
             }
         }
         cands.sort { $0.p > $1.p }
-        let best = cands.first
-        let unambiguous = best.map { b in cands.count == 1 || cands[1].p / b.p <= parameters.marginRatio } ?? false
+        var best = cands.first
+        if !joined, let start = cands.first(where: { $0.along <= parameters.startWindow && $0.distance < rejoin }) {
+            best = start                            // §5.5: the ride begins at the start, where a loop's end is as near
+        }
+        let unambiguous = best.map { b in
+            cands.allSatisfy { $0.along == b.along || $0.p / b.p <= parameters.marginRatio }
+        } ?? false
         let confident = best.map { $0.distance <= rejoin } ?? false && unambiguous && !gateFailed
 
         // §5.5: route status.
@@ -266,7 +285,8 @@ public struct RouteMatcher: Sendable {
             }
         case .rejoining(let since, let fixes):
             if let b = best, b.distance < rejoin, allowed {
-                if fix.time - since >= parameters.rejoinSeconds && fixes + 1 >= parameters.rejoinFixes {
+                if !joined && b.along <= parameters.startWindow
+                    || fix.time - since >= parameters.rejoinSeconds && fixes + 1 >= parameters.rejoinFixes {
                     becomeOn(b)
                 } else {
                     phase = .rejoining(since: since, fixes: fixes + 1)
@@ -308,10 +328,10 @@ public struct RouteMatcher: Sendable {
                 coverFrom = nil
             }
         }
-        let span = max(1, route.length - (joinAlong ?? 0))
+        let span = max(1, isLoop ? route.length : route.length - (joinAlong ?? 0))
         let coverage = min(1, covered.reduce(0) { $0 + ($1.upperBound - $1.lowerBound) } / span)
         let arrived = phase == .on && confident && best.map { route.length - $0.along <= parameters.arrivalRadius } == true
-            && coverage >= parameters.arrivalCoverage
+            && coverage >= (isLoop ? parameters.loopArrivalCoverage : parameters.arrivalCoverage)
 
         // §8: wrong way.
         var input = WrongWayDetector.Input(
@@ -375,13 +395,15 @@ public struct RouteMatcher: Sendable {
                 reversedSince = nil
                 return false                        // crossing it
             }
-        } else {
-            reversedSince = nil
-        }
+        }                                           // no direction (noise, a stop): keep what was known
         if leadInLength > 0, progressAlong < leadInLength, b.along > leadInLength + parameters.leadInMargin {
             return false                            // still on the lead-in
         }
         if !joined {
+            // Riding it backwards joins only for a ride that began at its end: a loop ridden the other
+            // way round, a route loaded the wrong way (the wrong-way warning offers to invert it). Not
+            // on the way to the start along its first stretch: the rider turns round there.
+            if reversedSince != nil { return beganAtEnd || joinNearest }
             return b.along <= parameters.startWindow || joinNearest || alignedStreak >= parameters.joinAnywhereFixes
         }
         return true

@@ -192,6 +192,21 @@ final class RouteMatcherTests: XCTestCase {
         }
     }
 
+    func testLoopStartedOnItsLastStretchDoesNotArriveThere() {
+        // The rider sets off 300 m (15 %) before the end of a loop, rides to its start and on.
+        let route = RideSim.route([(0, 0), (500, 0), (500, 500), (0, 500), (0, 0)])
+        for seed in seeds {
+            var sim = RideSim(seed: seed, sigma: 5)
+            var m = RouteMatcher(route: route)
+            var arrived = false
+            for (fix, _) in sim.ride(route, from: 1700) + sim.ride(route, from: 0, to: 600) {
+                arrived = arrived || m.update(fix).arrived
+            }
+            XCTAssertFalse(arrived, "seed \(seed)")
+            XCTAssertLessThan(m.last.best?.along ?? .infinity, 700, "seed \(seed)")   // on the loop's start
+        }
+    }
+
     func testTwoLapCircuitArrivesAfterTheSecondLap() {
         let lap: [(Double, Double)] = [(0, 0), (300, 0), (300, 300), (0, 300), (0, 0)]
         let route = RideSim.route(lap + lap.dropFirst())
@@ -299,6 +314,38 @@ final class RouteMatcherTests: XCTestCase {
             }
             // 18 km/h: within 15 s, 75 m.
             XCTAssertLessThanOrEqual(confirmedAfter ?? 99, 15, "seed \(seed)")
+        }
+    }
+
+    func testRouteRiddenBackwardsFromItsEndIsWrongWay() {
+        // A route loaded the wrong way round: the rider sets off from its end.
+        let route = RideSim.route([(0, 0), (0, 1500)])
+        for seed in seeds {
+            var sim = RideSim(seed: seed, sigma: 5)
+            var m = RouteMatcher(route: route)
+            var confirmedAt: Double?
+            for (fix, truth) in sim.ride(route, from: route.length, to: 1000, speed: 5) where confirmedAt == nil {
+                if m.update(fix).wrongWay == .confirmed { confirmedAt = truth }
+            }
+            // The 20 s start-up, the 5 s reversed join and the confirmation: within 150 m.
+            XCTAssertGreaterThan(confirmedAt ?? 0, route.length - 150, "seed \(seed)")
+        }
+    }
+
+    func testRidingBackwardsToTheStartIsNotWrongWay() {
+        // The rider reaches the start along the route's first stretch, the other way; then sets off.
+        let route = RideSim.route([(0, 0), (0, 1500)])
+        for seed in seeds {
+            var sim = RideSim(seed: seed, sigma: 5)
+            var m = RouteMatcher(route: route)
+            for (fix, _) in sim.ride(route, from: 300, to: 0, speed: 5) {
+                let r = m.update(fix)
+                XCTAssertEqual(r.wrongWay, .none, "seed \(seed)")
+            }
+            for (fix, _) in sim.ride(route, from: 0, to: 300, speed: 5) {
+                XCTAssertEqual(m.update(fix).wrongWay, .none, "seed \(seed)")
+            }
+            XCTAssertEqual(m.last.status, .on, "seed \(seed)")
         }
     }
 
@@ -451,17 +498,43 @@ final class MatchedEngineTests: XCTestCase {
         // North 400 then east; the rider overshoots the corner by 100 m, comes back and turns.
         let route = RideSim.route([(0, 0), (0, 400), (400, 400)])
         let rider = RideSim.route([(0, 0), (0, 500), (0, 400), (400, 400)])
-        for seed in 1...10 as ClosedRange<UInt64> {
+        for seed in 1...40 as ClosedRange<UInt64> {
             var sim = RideSim(seed: seed, sigma: 5)
             var e = engine(route)
             var arrived = false, wentOff = false
+            var steps: [Int] = []
             for (fix, _) in sim.ride(rider) where !arrived {
                 arrived = e.update(fix).arrived
                 wentOff = wentOff || e.snapshot.offRoute
                 XCTAssertNotEqual(e.snapshot.wrongWay, true, "seed \(seed)")
+                if let i = e.director?.guidance?.currentStepIndex, i != steps.last { steps.append(i) }
             }
             XCTAssertTrue(wentOff, "seed \(seed)")        // 100 m past the corner is off the route
             XCTAssertTrue(arrived, "seed \(seed)")
+            XCTAssertEqual(steps, steps.sorted(), "seed \(seed)")   // back at the corner, no flicker
+        }
+    }
+
+    func testLoopRiddenBackwardsFromItsStartWarnsAndInverts() {
+        // The loop's first stretch heads east, its last one comes down from the north: the rider sets
+        // off from the start up that last stretch, the loop the other way round.
+        let route = RideSim.route([(0, 0), (300, 0), (300, 300), (0, 300), (0, 0)])
+        for seed in 1...10 as ClosedRange<UInt64> {
+            var sim = RideSim(seed: seed, sigma: 5)
+            var e = engine(route)
+            var warnedAt: Double?, arrivedAt: Double?
+            for (sample, truth) in sim.ride(route, from: route.length, to: 0) where arrivedAt == nil {
+                var fix = sample                    // moving, the iPhone gives a course
+                fix.course = (route.heading(at: truth) + 180).truncatingRemainder(dividingBy: 360)
+                if e.snapshot.wrongWay == true, warnedAt == nil {
+                    warnedAt = truth
+                    guard let inverted = e.inverted() else { XCTFail("seed \(seed): can't invert"); break }
+                    e = inverted.engine
+                }
+                if e.update(fix).arrived { arrivedAt = truth }
+            }
+            XCTAssertGreaterThan(warnedAt ?? 0, route.length - 200, "seed \(seed)")
+            XCTAssertLessThan(arrivedAt ?? .infinity, 75, "seed \(seed)")   // back at the start
         }
     }
 
