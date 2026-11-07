@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import LocalAuthentication
+import SH2Protocol
 
 /// Settings › Advanced (UX_DESIGN §4.6): firmware info, maintenance (clock & language, compass),
 /// sound & touch, live log, demo mode (+ "Simulate alarm"), ride recording, DFU explainer, saved
@@ -48,6 +49,7 @@ private struct ObservedAdvancedList: View {
             maintenanceSection
             toolsSection
             demoSection
+            navigationSection
             recordingSection
             passwordSection
 
@@ -157,6 +159,23 @@ private struct ObservedAdvancedList: View {
             NavigationLink(value: HaloRoute.liveLog) {
                 Label("Live log", systemImage: "terminal")
             }
+        }
+        .listRowBackground(Theme.surface)
+    }
+
+    /// The classic engine stays available to compare with the matched one (MAP_MATCHING_SPEC §10).
+    private var navigationSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { settings.navigationEngine == .classic },
+                set: { settings.navigationEngine = $0 ? .classic : .matched }
+            )) {
+                Label("Classic navigation", systemImage: "arrow.triangle.turn.up.right.diamond")
+            }
+        } header: {
+            Text("Navigation")
+        } footer: {
+            Text("Locates you on the route the way the official SmartHalo app does: the current stretch only, and no wrong-way warning. From the next ride.")
         }
         .listRowBackground(Theme.surface)
     }
