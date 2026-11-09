@@ -283,7 +283,9 @@ ride recording, auto light/alarm automations.
 - **Recovery wizard** (modal, opened when the handshake reports `.needsRecovery` — from pairing or the
   chip): step 1 explain → `recover()`; step 2 reboot instructions, auto-advance when the device
   reappears (manual "I've rebooted it" fallback) → `reconnectAndFinish()`; step 3 done. The new
-  password is not shown (reachable in Advanced).
+  password is not shown (reachable in Advanced). `.needsRecovery` only follows a `RET_FAIL` to every
+  stored password and the empty one; an un-paired ring gets the saved password back without the
+  wizard, and a recovery reuses it (`docs/protocol/pairing.md`, "When a ring stops taking a password").
 - **Implemented (v1.6.0):** `UI/Onboarding/OnboardingView.swift` (replaces the old server/BLE
   choice screen) — Welcome (turning accent ring, static with Reduce Motion) → Pair (auto-scan on
   appear, radar pulses, "Found" list, a lone Halo highlighted, RSSI hint, tap → `pair(with:)` with
