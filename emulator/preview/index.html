@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Halo emulator</title>
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>Halo emulator</h1>
+    <p class="sub">The SmartHalo 2's own display firmware, running on this computer.</p>
+    <span class="status" id="status">connecting…</span>
+  </header>
+
+  <main class="layout">
+    <section class="device" aria-label="The Halo">
+      <canvas id="ring" aria-label="The ring and its display"></canvas>
+      <dl class="readout">
+        <div><dt>Time</dt><dd id="tick">–</dd></div>
+        <div><dt>Display</dt><dd id="panel">–</dd></div>
+        <div><dt>Front light</dt><dd id="front">–</dd></div>
+        <div><dt>Buzzer</dt><dd id="buzzer">silent</dd></div>
+      </dl>
+
+      <div class="toggles">
+        <label><input type="checkbox" id="connected" checked> App connected</label>
+        <label><input type="checkbox" id="moving"> Bike moving</label>
+        <label><input type="checkbox" id="answer" checked> Answer card requests like the app</label>
+        <label><input type="checkbox" id="sound"> Play the buzzer</label>
+      </div>
+
+      <div class="touch">
+        <h2>Touch</h2>
+        <button type="button" class="pad" id="pad" aria-describedby="pad-help">Tap here</button>
+        <p class="help" id="pad-help">Click for a short tap, hold for a long one. The taps go to the ring 0.7 s after the last.</p>
+        <div class="row">
+          <button type="button" data-swipe="0">← Swipe left</button>
+          <button type="button" data-swipe="1">Swipe right →</button>
+        </div>
+      </div>
+      <div class="row">
+        <button type="button" class="quiet" id="restart">Restart, connected</button>
+        <button type="button" class="quiet" id="restart-boot">Restart from power-on</button>
+      </div>
+    </section>
+
+    <section class="controls" aria-label="Commands">
+      <div id="groups"></div>
+
+      <form class="custom" id="custom">
+        <h2>Any command</h2>
+        <label for="hex">Bytes, in hex: service, command, payload</label>
+        <div class="row">
+          <input id="hex" name="hex" spellcheck="false" autocomplete="off" placeholder="01 12 3c 8c 00">
+          <button type="submit">Send</button>
+        </div>
+      </form>
+
+      <div class="log">
+        <div class="log-head">
+          <h2>Log</h2>
+          <button type="button" class="quiet" id="clear">Clear</button>
+        </div>
+        <ol id="log" aria-live="polite"></ol>
+      </div>
+    </section>
+  </main>
+
+  <script src="halo-view.js"></script>
+  <script type="module" src="preview.js"></script>
+</body>
+</html>

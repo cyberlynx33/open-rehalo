@@ -168,10 +168,19 @@ final class LiveActivityManager {
                 distance = ""
             }
         }
+        var turn = nav.turn.rawValue
+        var symbol = nav.turn.systemImage
+        if nav.wrongWay {
+            // Shown like off-route (the warning tint), with the U-turn.
+            turn = "wrongWay"
+            symbol = "arrow.uturn.backward"
+            instruction = String(localized: "Wrong way")
+            distance = ""
+        }
         let speed = nav.speed.map { f.speedParts($0) }
         let remaining = f.distanceParts(nav.remaining)
-        return .init(turn: nav.turn.rawValue,
-                     symbol: nav.turn.systemImage,
+        return .init(turn: turn,
+                     symbol: symbol,
                      distance: distance,
                      instruction: instruction,
                      speedValue: speed?.value ?? "—",
@@ -179,7 +188,7 @@ final class LiveActivityManager {
                      distanceValue: remaining.value,
                      distanceUnit: remaining.unit,
                      progress: nav.progress,
-                     offRoute: nav.turn == .offRoute,
+                     offRoute: nav.turn == .offRoute || nav.wrongWay,
                      haloConnected: nav.haloConnected,
                      lightOn: lightOn,
                      ended: false)

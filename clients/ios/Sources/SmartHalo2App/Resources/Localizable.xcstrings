@@ -562,6 +562,23 @@
         }
       }
     },
+    "Classic navigation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classic navigation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navegación clásica"
+          }
+        }
+      }
+    },
     "Clock" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -885,6 +902,40 @@
         }
       }
     },
+    "Ignore" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignore"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorar"
+          }
+        }
+      }
+    },
+    "Invert route" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invert route"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invertir ruta"
+          }
+        }
+      }
+    },
     "Lead me to the start" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -970,6 +1021,23 @@
         }
       }
     },
+    "Locates you on the route the way the official SmartHalo app does: the current stretch only, and no wrong-way warning. From the next ride." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locates you on the route the way the official SmartHalo app does: the current stretch only, and no wrong-way warning. From the next ride."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te sitúa en la ruta como la app oficial de SmartHalo: solo el tramo actual y sin aviso de sentido contrario. Desde la próxima ruta."
+          }
+        }
+      }
+    },
     "Long tap" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1034,6 +1102,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Navegar ahora"
+          }
+        }
+      }
+    },
+    "Navigation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navigation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navegación"
           }
         }
       }
@@ -7243,6 +7328,23 @@
         }
       }
     },
+    "Wrong way" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrong way"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentido contrario"
+          }
+        }
+      }
+    },
     "You" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7256,6 +7358,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tú"
+          }
+        }
+      }
+    },
+    "You are riding the route the other way." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You are riding the route the other way."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vas por la ruta en sentido contrario."
           }
         }
       }

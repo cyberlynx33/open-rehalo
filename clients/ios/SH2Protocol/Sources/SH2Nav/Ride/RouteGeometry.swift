@@ -197,3 +197,43 @@ public struct RouteGeometry: Equatable, Sendable {
         return best
     }
 }
+
+// MARK: - Directions along the route (matched engine, docs/MAP_MATCHING_SPEC.md §5.1)
+
+extension RouteGeometry {
+    /// The bearing of the chord from `from` to `to` metres along the route (both clamped to it), or
+    /// nil when the chord is under half a metre: a hairpin folded on itself, or a zero-length stretch.
+    public func chordBearing(from: Double, to: Double) -> Double? {
+        guard points.count > 1 else { return nil }
+        let a = coordinate(at: from), b = coordinate(at: to)
+        guard a.distance(to: b) >= 0.5 else { return nil }
+        return a.bearing(to: b)
+    }
+
+    /// The route's direction at `along`, over a window of `window` metres kept inside `range` (the
+    /// whole route by default): centred on `along` when it fits, pushed in from an end otherwise.
+    /// Measured along the route, never per segment, as GPX files have zero-length segments.
+    public func direction(at along: Double, over window: Double, within range: ClosedRange<Double>? = nil) -> Double? {
+        let r = range ?? 0...length
+        let w = min(window, r.upperBound - r.lowerBound)
+        guard w >= 1 else { return nil }
+        var lo = max(r.lowerBound, along - w / 2)
+        let hi = min(r.upperBound, lo + w)
+        lo = max(r.lowerBound, hi - w)
+        return chordBearing(from: lo, to: hi)
+    }
+
+    /// How much the route turns back at `along`: the angle, 0…180°, between its direction over the
+    /// `span` metres before and after. Over ~120° the route doubles back (an out-and-back's tip, a
+    /// hairpin), and the two sides are different passes for the matcher.
+    public func reversal(at along: Double, span: Double = 15) -> Double {
+        guard let before = chordBearing(from: along - span, to: along),
+              let after = chordBearing(from: along, to: along + span) else { return 0 }
+        return abs(GeoPoint.angleDelta(from: before, to: after))
+    }
+
+    /// The same route ridden the other way.
+    public func reversed() -> RouteGeometry {
+        RouteGeometry(points: points.reversed(), elevations: elevations.reversed(), navPoints: navPoints.reversed())
+    }
+}

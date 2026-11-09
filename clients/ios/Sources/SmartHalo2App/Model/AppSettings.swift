@@ -32,6 +32,7 @@ final class AppSettings: ObservableObject {
         static let callAlertSound = "sh2.call.sound"
         static let rainAlerts = "sh2.rain.alerts"
         static let syncPasswords = "sh2.keychain.syncPasswords"
+        static let navigationEngine = "sh2.nav.engine"
     }
 
     private let defaults = UserDefaults.standard
@@ -123,6 +124,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(rainAlerts, forKey: Key.rainAlerts) }
     }
 
+    /// How a ride locates the rider on the route (docs/MAP_MATCHING_SPEC.md): the route matcher with
+    /// the wrong-way warning (default), or the official app's classic logic. From the next ride.
+    @Published var navigationEngine: RideEngine.Engine {
+        didSet { defaults.set(navigationEngine.rawValue, forKey: Key.navigationEngine) }
+    }
     /// Keep the ring passwords in iCloud Keychain (Settings › Advanced). Default on, so a lost or
     /// replaced iPhone doesn't force another cold-reboot recovery. Toggling migrates stored items.
     @Published var syncPasswordsToICloud: Bool {
@@ -160,6 +166,8 @@ final class AppSettings: ObservableObject {
         callAlerts = defaults.object(forKey: Key.callAlerts) as? Bool ?? true
         callAlertSound = defaults.object(forKey: Key.callAlertSound) as? Bool ?? true
         rainAlerts = defaults.bool(forKey: Key.rainAlerts)
+        navigationEngine = defaults.string(forKey: Key.navigationEngine).flatMap(RideEngine.Engine.init(rawValue:))
+            ?? .matched
         syncPasswordsToICloud = defaults.object(forKey: Key.syncPasswords) as? Bool ?? true
         // didSet doesn't run in init: bring already-stored passwords in line (one-time migration).
         KeychainStore.applySync(syncPasswordsToICloud)

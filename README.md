@@ -65,12 +65,13 @@ ride recording, and Strava or Apple Health sync.
 | `clients/desktop/` | Electron desktop app on top of `sh2-core`. |
 | `sh2-core/` | Transport-agnostic protocol core in JavaScript, with no dependencies. |
 | `sh2-server/` | Optional self-hosted server for accounts and rides. |
-| `emulator/` | Software model of the SmartHalo 2 that runs the recovery end to end. |
+| `emulator/` | Software model of the SmartHalo 2 that runs the recovery end to end, and a live preview of the ring and its display driven by the firmware's own code ([`emulator/README.md`](emulator/README.md)). |
 | `site/` | The project website, published to GitHub Pages. |
 | `docs/` | Protocol, API and app specifications. |
 
 The Linux and desktop tools need the SmartHalo 2 firmware source to run a real recovery: point
-`SH2_FIRMWARE_SRC` at your copy.
+`SH2_FIRMWARE_SRC` at your copy. The emulator's preview builds the firmware's display code from your
+copy too, with `SH2_STM_FIRMWARE`.
 
 ## Install the iOS app
 

@@ -28,6 +28,10 @@ public struct NavStep: Equatable, Sendable {
     public var roundaboutExitDistance: Double = -1
     public var roundaboutExitStreetName = ""
     public var startIndex: Int
+    /// Addition: index in the route's points of the vertex this step's manoeuvre is at, when the GPX
+    /// turn detector found it (the matched engine reads where the manoeuvre is along the route from it;
+    /// `startIndex` can't, as it counts decimated points). Nil for routed steps.
+    public var routeIndex: Int? = nil
 
     var isRoundabout: Bool { type & 0x10 != 0 }
 
@@ -94,7 +98,8 @@ public enum NavStepFactory {
             out.append(NavStep(type: NavStepType.standard, angles: [angle],
                                headingBefore: p.headingBefore, headingAfter: p.headingAfter,
                                entrance: m, exit: m, mode: step.mode, instruction: key, streetName: key,
-                               path: p.points, firstDistance: p.distance, startIndex: startIndex))
+                               path: p.points, firstDistance: p.distance, startIndex: startIndex,
+                               routeIndex: p.vertex))
             startIndex += p.points.count
         }
         return out
@@ -103,6 +108,8 @@ public enum NavStepFactory {
     /// `SHPath`.
     struct Path {
         var points: [NavLocation] = []
+        /// Addition: index in the detector's input of the apex this path starts at.
+        var vertex: Int? = nil
         var headingBefore = 0
         var headingAfter = 0
         /// `getPathAngle()[0]`.
@@ -153,7 +160,7 @@ public enum NavStepFactory {
                 } else {
                     appendPath(&result, cur)
                 }
-                cur = Path(points: [p[maxIdx]])
+                cur = Path(points: [p[maxIdx]], vertex: maxIdx)
             }
             if j < n { cur.points.append(p[j]) }
         } while j < n - 1

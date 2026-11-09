@@ -47,6 +47,30 @@ public struct NavDisplayStatus: Equatable, Sendable {
     public init() {}
 }
 
+/// Addition: what the route matcher says about a fix, for the "matched" engine
+/// (docs/MAP_MATCHING_SPEC.md §6.3). With one, the matcher decides on/off the route, the step and
+/// arrival; `NavGuidance` keeps drawing the ring as the official app does.
+public struct NavMatch: Equatable, Sendable {
+    public var status: RouteMatcher.Status
+    /// Where the pointer and the arcs onto the route lead: the best candidate, or the route's start
+    /// while the rider is on their way to it.
+    public var target: NavLocation
+    /// Metres along the route of the best candidate, and how far it is.
+    public var along: Double
+    public var distance: Double
+    public var confident: Bool
+    public var unambiguous: Bool
+    /// Wrong way suspected, confirmed or ignored: the step must hold still.
+    public var frozen: Bool
+    public var arrived: Bool
+
+    public init(status: RouteMatcher.Status, target: NavLocation, along: Double = 0, distance: Double = .infinity,
+                confident: Bool = false, unambiguous: Bool = false, frozen: Bool = false, arrived: Bool = false) {
+        self.status = status; self.target = target; self.along = along; self.distance = distance
+        self.confident = confident; self.unambiguous = unambiguous; self.frozen = frozen; self.arrived = arrived
+    }
+}
+
 /// `smarthalo::SHGuidance` in GPX mode (`NavigationMode.OfflineTurnByTurn`, `processOfflineStepByStep`),
 /// with the parts of `NavigationState` and `SHRerouteSystem` it uses. Feed it every GPS fix with
 /// `update(_:)`, then read `display`, `sound`, `offlineStatus` and the bearings — that is what the
@@ -88,6 +112,22 @@ public struct NavGuidance: Sendable {
     var ticksAwayFromPath = 0
     /// Seconds clock for the reroute back-off (injectable for tests).
     var now: @Sendable () -> Int = { Int(Date().timeIntervalSince1970) }
+
+    // Addition: the matched engine (docs/MAP_MATCHING_SPEC.md §6).
+    /// Metres along the route of each step's manoeuvre; nil in the classic engine.
+    public private(set) var stepAlong: [Double]?
+    /// A jump to a step that isn't the next one waits for this many confident fixes…
+    static let jumpFixes = 3
+    /// …and, backwards, for the rider to be this far before the current step's manoeuvre.
+    static let behindMargin = 30.0
+    /// This far past the next manoeuvre, the step completes even if the official rule hasn't fired.
+    static let forcedCompletionPast = 30.0
+    /// The official completion only counts from this far before the manoeuvre.
+    static let completionGate = 5.0
+    /// Off the route, the step follows the matcher's best candidate within this distance.
+    static let offRouteSyncDistance = 95.0
+    var pendingStep: Int?
+    var pendingCount = 0
 
     /// `SHGuidance(Location const&, std::string const& gpx)`.
     public init(start: NavLocation, steps: [NavStep]) {
@@ -132,28 +172,48 @@ public struct NavGuidance: Sendable {
         processOfflineStepByStep(fix)
     }
 
-    /// `processOfflineStepByStep`.
-    mutating func processOfflineStepByStep(_ loc: NavLocation) {
+    /// Addition (matched engine): where each step's manoeuvre is along the route. Ignored unless there
+    /// is one value per step.
+    public mutating func enableMatching(stepAlong: [Double]) {
+        self.stepAlong = stepAlong.count == steps.count ? stepAlong : nil
+    }
+
+    /// Addition (matched engine): one fix with what the matcher made of it. A fix the matcher ignored
+    /// (`.hold`) only feeds the bearing: the ring keeps what it shows.
+    public mutating func update(_ fix: NavLocation, match: NavMatch) {
+        bearing.update(fix)
+        guard match.status != .hold else { return }
+        processOfflineStepByStep(fix, match)
+    }
+
+    /// `processOfflineStepByStep`. With a `match` (matched engine), the matcher decides on/off the route
+    /// and the step; everything the ring shows is worked out as in the original.
+    mutating func processOfflineStepByStep(_ loc: NavLocation, _ match: NavMatch? = nil) {
         let n = steps.count
         guard n >= 2 else { offThePath = true; return }
         if currentStepIndex >= n - 2 { currentStepIndex = n - 2 }
         guard isNavigating else { offThePath = true; return }
+        if let match { syncStep(match) }
 
         var cur = steps[currentStepIndex]
         var next = steps[currentStepIndex + 1]
         var cpl = ClosestPathLocation(loc, cur.path)
         let dist = turnStarted ? next.entrance.distance(to: loc) : cpl.distanceRemaining
-        checkForUserReroute(cur, next, loc)
+        if let match {
+            if match.status == .off { offThePath = true }
+        } else {
+            checkForUserReroute(cur, next, loc)
+        }
 
         if offThePath {
             display.isStepAnimationNow = true
-            executeGPXCompassMode(loc, cur, &next)
+            executeGPXCompassMode(loc, cur, &next, match)
             if offlineStatus != .onPath { return }
         } else {
             hasReachedOrigin = true
             offlineStatus = .onPath
             offPathDestination = NavLocation(999, 999)
-            guard processIncompleteStep(dist, next, loc) else { return }
+            guard processIncompleteStep(dist, next, loc, match) else { return }
             processStepComplete(next)
         }
 
@@ -162,9 +222,9 @@ public struct NavGuidance: Sendable {
         if currentStepIndex < n - 1 {
             next = steps[currentStepIndex + 1]
             cpl = ClosestPathLocation(loc, cur.path)
-            _ = processIncompleteStep(distanceToManeuver(next, loc, cpl), next, loc)
+            _ = processIncompleteStep(distanceToManeuver(next, loc, cpl), next, loc, match)
         }
-        if currentStepIndex >= n - 1 {           // inlined onNavigationCompleted()
+        if match == nil, currentStepIndex >= n - 1 {           // inlined onNavigationCompleted()
             isComplete = true
             display.typesToRemove.append(.angle)
             display.currentType = .none
@@ -173,8 +233,21 @@ public struct NavGuidance: Sendable {
         updateDeviceInstruction(cur, next)
     }
 
-    /// `processIncompleteStep` → true when the manoeuvre `step` is done.
-    mutating func processIncompleteStep(_ dist: Double, _ step: NavStep, _ loc: NavLocation) -> Bool {
+    /// `processIncompleteStep` → true when the manoeuvre `step` is done. With a confident `match`, the
+    /// official completion only counts once the rider has reached the manoeuvre along the route: the
+    /// original completes a started turn on being 20 m from it in any direction.
+    mutating func processIncompleteStep(_ dist: Double, _ step: NavStep, _ loc: NavLocation,
+                                        _ match: NavMatch? = nil) -> Bool {
+        let done = processIncompleteStepOfficial(dist, step, loc)
+        if done, let match, match.confident, let stepAlong, currentStepIndex + 1 < stepAlong.count,
+           match.along < stepAlong[currentStepIndex + 1] - Self.completionGate {
+            return false
+        }
+        return done
+    }
+
+    /// The original `processIncompleteStep`.
+    mutating func processIncompleteStepOfficial(_ dist: Double, _ step: NavStep, _ loc: NavLocation) -> Bool {
         let wasAnimating = display.isStepAnimationNow
         display.isStepAnimationNow = dist < (step.type == NavStepType.destination ? 105 : 95) || turnStarted
         if wasAnimating && !display.isStepAnimationNow
@@ -276,12 +349,71 @@ public struct NavGuidance: Sendable {
         }
     }
 
+    // MARK: - Step sync (matched engine, docs/MAP_MATCHING_SPEC.md §6.2)
+
+    /// Bring the step in line with where the matcher places the rider, at the start of a fix. The next
+    /// manoeuvre completes the official way (with its animation) unless the rider is well past it; any
+    /// other jump waits for a few confident fixes, and backwards for the rider to be clearly behind.
+    mutating func syncStep(_ match: NavMatch) {
+        guard let stepAlong, !match.frozen else { pendingStep = nil; return }
+        let usable = offThePath
+            ? hasReachedOrigin && match.unambiguous && match.distance <= Self.offRouteSyncDistance
+            : match.confident
+        guard usable else { pendingStep = nil; return }
+        let n = steps.count
+        var k = 0
+        for i in 0..<n where stepAlong[i] <= match.along { k = i }
+        k = min(k, n - 2)
+        let cur = currentStepIndex
+        if k == cur { pendingStep = nil; return }
+        if offThePath {                             // so the arcs back onto the route aim ahead
+            pendingStep = nil
+            if k < cur && match.along >= stepAlong[cur] - Self.behindMargin { return }   // noise at a corner
+            jumpToStep(k)
+            return
+        }
+        if k == cur + 1 {
+            pendingStep = nil
+            if match.along - stepAlong[k] >= Self.forcedCompletionPast { processStepComplete(steps[k]) }
+            return
+        }
+        if k < cur && match.along >= stepAlong[cur] - Self.behindMargin { pendingStep = nil; return }
+        if pendingStep == k { pendingCount += 1 } else { pendingStep = k; pendingCount = 1 }
+        if pendingCount >= Self.jumpFixes {
+            pendingStep = nil
+            jumpToStep(k)
+        }
+    }
+
+    /// Move to step `k` with no animation of the steps in between: the turn state starts over, and an
+    /// arc on the ring is cleared once.
+    mutating func jumpToStep(_ k: Int) {
+        currentStepIndex = k
+        turnStarted = false
+        stepAnimationStarted = false
+        nextTurnAnimationStarted = false
+        display.thisTurn = NavTurn()
+        display.nextTurn = NavTurn()
+        bearing.clearCurrent()
+        if display.currentType == .angle || display.currentType == .destination {
+            if !display.typesToRemove.contains(.angle) { display.typesToRemove.append(.angle) }
+            display.currentType = .none
+            display.isStepAnimationNow = false
+        }
+    }
+
     // MARK: - Off the path
 
     /// `executeGPXCompassMode`: rejoin (< 15 m), turning back onto the path (< 95 m and heading
     /// towards it), or the pointer to the nearest point of the route.
-    mutating func executeGPXCompassMode(_ loc: NavLocation, _ cur: NavStep, _ next: inout NavStep) {
-        let target = closestLocationOnNearbyPath(loc, cur, next)
+    ///
+    /// With a `match` (matched engine): the target is the matcher's, the rejoin is the matcher's `on`
+    /// (through the same branch, which clears the pointer and plays "back on route"), the step never
+    /// moves here, and while the matcher waits to rejoin the ring keeps what it shows.
+    mutating func executeGPXCompassMode(_ loc: NavLocation, _ cur: NavStep, _ next: inout NavStep,
+                                        _ match: NavMatch? = nil) {
+        if match?.status == .rejoining { return }
+        let target = match?.target ?? closestLocationOnNearbyPath(loc, cur, next)
         guard target.exists else { return }
         let d = loc.distance(to: target)
         display.distanceToThisManeuver = Int(d.rounded())
@@ -289,7 +421,7 @@ public struct NavGuidance: Sendable {
         let crow = bearing.crowFlies
         let headingToPath = crow != NavBearing.unknown && NavMath.smallerGap(crow, brg) < 40
 
-        if d < 15 {
+        if match.map({ $0.status == .on }) ?? (d < 15) {
             if display.currentType == .pointer { display.typesToRemove.append(.pointer) }
             if display.currentType != .none { sound = .returnToPath }
             offThePath = false
@@ -308,7 +440,7 @@ public struct NavGuidance: Sendable {
             display.nextTurn = NavTurn()
             display.nextTurn.stepType = NavStepType.standard
             display.thisTurn.turnProgress = Self.stepProgressWithDistance(d)
-            if target.distance(to: next.entrance) < 5 {
+            if match == nil && target.distance(to: next.entrance) < 5 {
                 currentStepIndex += 1
                 if currentStepIndex < steps.count - 1 { next = steps[currentStepIndex + 1] }
             }

@@ -16,6 +16,9 @@ to them:
 - `clients/ios/SH2Protocol/Sources/SH2Protocol/Navigation/`
 - `sh2-core/` protocol constants and command layouts
 - `site/firmware.js`
+- `emulator/preview/halo-view.js`: the LED driver's gamma table
+- `emulator/display/`: the stand-ins for the firmware interfaces it builds against (the firmware
+  itself is read from your copy and not included)
 
 SmartHalo is a trademark of its respective owner. rehalo is an independent project, not affiliated
 with or endorsed by SmartHalo or CycleLabs.
