@@ -55,6 +55,11 @@ public struct RideSnapshot: Equatable, Sendable, Codable {
     public var compassBearing = 0.0
     /// Metres left of the lead-in to the route's start; nil when there is none or it's done.
     public var toStart: Double?
+    /// Matched engine: riding the route the wrong way (a confirmed warning the rider hasn't ignored).
+    /// Nil in the classic engine.
+    public var wrongWay: Bool?
+    /// Matched engine: the wrong-way warning can offer to invert the route (a GPX ride, lead-in done).
+    public var canInvert: Bool?
 
     public init() {}
 }
@@ -77,6 +82,21 @@ public struct RideEngine: Sendable {
     /// Length of the lead-in chained before the route (0 = none).
     let leadInLength: Double
 
+    /// Which logic locates the rider on the route.
+    public enum Engine: String, Sendable, Codable {
+        /// The official app's: the current stretch, a step that only moves forward.
+        case classic
+        /// The route matcher over the whole route, with the wrong-way warning
+        /// (docs/MAP_MATCHING_SPEC.md).
+        case matched
+    }
+    public let engine: Engine
+    /// The matched engine's matcher; nil in the classic engine and as the crow flies.
+    public private(set) var matcher: RouteMatcher?
+    /// A GPX ride (not a routed destination): the route can be inverted on a wrong-way warning.
+    public let invertible: Bool
+    let joinNearest: Bool
+
     /// Further than this from the expected stretch, look for the rider on the whole route.
     static let rematchBeyond = 30.0   // metres
     public static let straightBeyond = 1000.0
@@ -90,21 +110,30 @@ public struct RideEngine: Sendable {
     ///   add up to `route`, the GPX turn detector finds the turns.
     /// - `leadInLength`: length of a lead-in to the route's start already chained into `route`.
     /// - `joinNearest`: join the route at its nearest point instead of its start.
+    /// - `engine`: classic by default; the app picks matched unless the rider chose classic.
     public init(route: RouteGeometry, title: String, settings: NavDirector.Settings,
                 instructions: [(location: NavLocation, text: String)] = [],
                 routedSteps: [RoutedStep] = [],
-                leadInLength: Double = 0, joinNearest: Bool = false) {
+                leadInLength: Double = 0, joinNearest: Bool = false, engine: Engine = .classic) {
         self.route = route
         compassTarget = nil
         self.leadInLength = leadInLength
+        self.engine = engine
+        self.joinNearest = joinNearest
+        invertible = routedSteps.isEmpty && (instructions.isEmpty || leadInLength > 0)
         var d = RoutedStep.covers(routedSteps, length: route.length)
             ? NavDirector(routed: routedSteps, title: title, settings: settings)
             : NavDirector(points: route.navPoints.map { NavLocation($0.lat, $0.lon) }, title: title,
                           settings: settings, instructions: instructions)
         d.startAtNearestStep = joinNearest
+        if engine == .matched {
+            d.enableMatching(stepAlong: Self.stepAlong(d.steps, on: route))
+            matcher = RouteMatcher(route: route, leadInLength: leadInLength, joinNearest: joinNearest)
+        }
         director = d
         reset()
         snapshot.toStart = leadInLength > 0 ? leadInLength : nil
+        if engine == .matched { snapshot.wrongWay = false; snapshot.canInvert = false }
     }
 
     /// "As the crow flies" to `destination`: the ring points at it, no route. `origin` (the rider,
@@ -114,6 +143,9 @@ public struct RideEngine: Sendable {
         route = RouteGeometry(points: [origin ?? destination, destination])
         compassTarget = destination
         leadInLength = 0
+        engine = .classic                           // a straight line: nothing to match
+        invertible = false
+        joinNearest = false
         compass = CompassDirector(destination: NavLocation(destination.lat, destination.lon), title: title,
                                   settings: settings)
         reset()
@@ -177,7 +209,85 @@ public struct RideEngine: Sendable {
             let phone = fix.speed < 1.5 ? compassHeading : nil
             return compass?.update(loc, heading: phone) ?? NavDirector.Result()
         }
-        return director?.update(loc) ?? NavDirector.Result()
+        guard var m = matcher else { return director?.update(loc) ?? NavDirector.Result() }
+        let r = m.update(fix)
+        matcher = m
+        let match = navMatch(r)
+        return director?.update(loc, match: match, wrongWay: r.wrongWay == .confirmed) ?? NavDirector.Result()
+    }
+
+    /// What the guidance is told about a fix. On the way to the route's start (not joined yet, not
+    /// "start at the nearest point") the pointer leads to the start, as in the official app.
+    func navMatch(_ r: RouteMatcher.Result) -> NavMatch {
+        let best = r.best
+        let start = route.points[0]
+        let target = (r.joined || joinNearest)
+            ? best.map { NavLocation($0.point.lat, $0.point.lon) } ?? NavLocation(start.lat, start.lon)
+            : NavLocation(start.lat, start.lon)
+        return NavMatch(status: r.status, target: target, along: best?.along ?? 0,
+                        distance: best?.distance ?? .infinity, confident: r.confident,
+                        unambiguous: r.unambiguous, frozen: r.wrongWay != .none, arrived: r.arrived)
+    }
+
+    // MARK: - Wrong way (matched engine)
+
+    /// The rider chose "Ignore" on the wrong-way warning: silent until they ride forward again.
+    public mutating func ignoreWrongWay() {
+        matcher?.ignoreWrongWay()
+        snapshot.wrongWay = false
+        snapshot.canInvert = false
+    }
+
+    /// The same ride on the route turned around, the rider already on it where they are now
+    /// (docs/MAP_MATCHING_SPEC.md §9.3), and what clears the ring first. Ride numbers carry on. Nil
+    /// unless this is a matched GPX ride placed on the route.
+    public func inverted() -> (engine: RideEngine, commands: [NavCommand])? {
+        guard engine == .matched, invertible, snapshot.toStart == nil, let director,
+              let m = matcher, let best = m.last.best else { return nil }
+        let reversed = route.reversed()
+        var e = RideEngine(route: reversed, title: director.title, settings: director.settings, engine: .matched)
+        let d = director.continuing(on: reversed.navPoints.map { NavLocation($0.lat, $0.lon) })
+        e.director = d
+        e.director?.enableMatching(stepAlong: Self.stepAlong(d.steps, on: reversed))
+        let along = max(0, reversed.length - best.along)
+        e.matcher = RouteMatcher(continuing: m, on: reversed, at: along)
+        e.matchedAlong = along
+        e.lastFix = lastFix
+        e.snapshot.distanceRidden = snapshot.distanceRidden
+        e.snapshot.speed = snapshot.speed
+        e.snapshot.heading = snapshot.heading
+        e.snapshot.fixCount = snapshot.fixCount
+        e.snapshot.reachedOrigin = true
+        e.snapshot.progress = reversed.length > 0 ? min(1, along / reversed.length) : 0
+        e.snapshot.remainingDistance = max(0, reversed.length - along)
+        e.snapshot.remainingGain = reversed.remainingGain(from: along)
+        return (e, director.clearRing())
+    }
+
+    /// Where each manoeuvre of `steps` is along `route` (docs/MAP_MATCHING_SPEC.md §6.1): exact for
+    /// the GPX detector's turns, projected onto the route for a routing service's steps.
+    static func stepAlong(_ steps: [NavStep], on route: RouteGeometry) -> [Double] {
+        let n = steps.count
+        guard n >= 2 else { return Array(repeating: 0, count: n) }
+        var along = [Double](repeating: 0, count: n)
+        along[n - 1] = route.length
+        for i in 1..<(n - 1) {
+            let previous = along[i - 1]
+            var value: Double
+            if let index = steps[i].routeIndex, index < route.cumulative.count {
+                value = route.cumulative[index]
+            } else {
+                let e = steps[i].entrance
+                let ahead = previous + 1.5 * steps[i - 1].firstDistance + 100
+                if let m = route.match(GeoPoint(e.lat, e.lon), in: previous...ahead), m.distance <= 25 {
+                    value = m.along
+                } else {
+                    value = previous + steps[i - 1].firstDistance
+                }
+            }
+            along[i] = min(max(value, previous), route.length)
+        }
+        return along
     }
 
     /// The screen's numbers: what the ring guidance decided, plus progress, distance and speed.
@@ -208,6 +318,16 @@ public struct RideEngine: Sendable {
             return
         }
 
+        if let r = matcher?.last {
+            // Matched engine: the matcher's along, kept only from confident matches on the route.
+            followGuidance()
+            if !snapshot.offRoute, r.confident, let best = r.best { matchedAlong = best.along }
+            followRoute(fix)
+            snapshot.wrongWay = r.wrongWay == .confirmed
+            snapshot.canInvert = r.wrongWay == .confirmed && invertible && snapshot.toStart == nil
+            return
+        }
+
         // Snap onto the route, near where we were (so loops don't jump to the end), falling back
         // to the whole route when the rider isn't near the expected stretch.
         var candidate = route.match(here, in: (matchedAlong - 60)...(matchedAlong + 500))
@@ -219,7 +339,11 @@ public struct RideEngine: Sendable {
 
         followGuidance()
         if !snapshot.offRoute { matchedAlong = m.along }
+        followRoute(fix)
+    }
 
+    /// Progress, distance and climb left, heading and the lead-in countdown from `matchedAlong`.
+    private mutating func followRoute(_ fix: RideFix) {
         snapshot.progress = route.length > 0 ? min(1, matchedAlong / route.length) : 0
         snapshot.remainingDistance = max(0, route.length - matchedAlong)
         snapshot.remainingGain = route.remainingGain(from: matchedAlong)

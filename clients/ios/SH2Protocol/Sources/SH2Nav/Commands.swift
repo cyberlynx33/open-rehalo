@@ -450,6 +450,9 @@ public enum Commands {
         public static let destination: [UInt8] = [0x01, 0x05, 0x00, 0x51, 0x01, 0x49, 0x00, 0x6b,
                                                   0x01, 0x87, 0x00, 0x69, 0x02, 0x0b, 0x00, 0xc3]
         public static let info: [UInt8] = [0x01, 0x05, 0x00, 0x58, 0x01, 0x5d, 0x00, 0x63, 0x01, 0x49, 0x00, 0x39]
+        /// Addition: wrong way (the official set has no warning): 440 Hz for 150 ms, then 330 Hz for
+        /// 250 ms.
+        public static let wrongWay: [UInt8] = [0x01, 0xb8, 0x00, 0x96, 0x01, 0x4a, 0x00, 0xfa]
     }
     public static func soundStop() -> Data { Data([2, 1]) }
     /// `{2,2}` touch sounds. `[2,2, volume ≤ 100, on?1:0]` (`SoundsCommandsController.toggleTouchSounds`;

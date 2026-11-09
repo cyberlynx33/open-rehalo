@@ -189,6 +189,9 @@ Global:
 - **Off route:** the turn panel turns amber and says `⟲ Back to the route · 120 m`, with an arrow
   towards the nearest point. The ring shows the return-to-route pointer (current `GuidanceController`
   behavior). The phone adds no sound.
+- **Wrong way** ([`MAP_MATCHING_SPEC.md`](MAP_MATCHING_SPEC.md) §9, matched engine): an amber banner, "Wrong
+  way", with **Invert route** (GPX rides) and **Ignore**, and a warning haptic. The ring shows its U-turn
+  glyph.
 - **[💡]** toggles the front light without leaving the screen.
 - **STOP** asks for confirmation with a long press or a dialog, to avoid stopping by accident. On
   stopping, `navOff` is sent and a brief summary appears (distance, time, average).

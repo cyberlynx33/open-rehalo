@@ -62,6 +62,7 @@ struct NavigatingView: View {
         }
         .onChange(of: guidance.fixCount) { _, _ in feedFix() }
         .sensoryFeedback(.warning, trigger: guidance.offRoute) { old, new in !old && new }
+        .sensoryFeedback(.warning, trigger: guidance.wrongWayAlerts)
         .alert("End the route?", isPresented: $confirmStop) {
             Button("Keep going", role: .cancel) {}
             Button("End", role: .destructive) { guidance.stop() }
@@ -108,6 +109,11 @@ struct NavigatingView: View {
             if guidance.haloLost {
                 NoticeBanner(systemImage: "antenna.radiowaves.left.and.right.slash",
                              text: "Halo disconnected. Guidance continues on the phone.")
+            }
+            if guidance.wrongWay {
+                WrongWayBanner(canInvert: guidance.canInvert,
+                               invert: { guidance.invert() },
+                               ignore: { guidance.ignoreWrongWay() })
             }
             HStack(alignment: .top) {
                 if guidance.simulated {
@@ -439,6 +445,59 @@ struct NoticeBanner: View {
                 .strokeBorder(Theme.warn.opacity(0.6), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Riding the route the wrong way (MAP_MATCHING_SPEC §9.2): what's happening and what to do about it.
+/// The ring shows its U-turn meanwhile.
+struct WrongWayBanner: View {
+    let canInvert: Bool
+    let invert: () -> Void
+    let ignore: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: "arrow.uturn.backward").font(.headline.weight(.bold))
+                Text("Wrong way").font(.headline.weight(.bold))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.warn)
+            Text("You are riding the route the other way.")
+                .font(.subheadline)
+                .foregroundStyle(Theme.text)
+            HStack(spacing: Theme.Space.s) {
+                if canInvert {
+                    Button(action: invert) {
+                        Label("Invert route", systemImage: "arrow.left.arrow.right")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Theme.onAccent)
+                            .padding(.horizontal, Theme.Space.m)
+                            .frame(minHeight: 44)
+                            .background(Theme.warn, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button(action: ignore) {
+                    Text("Ignore")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Theme.warn)
+                        .padding(.horizontal, Theme.Space.m)
+                        .frame(minHeight: 44)
+                        .overlay(Capsule().strokeBorder(Theme.warn.opacity(0.6), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
+        .background(Theme.surface.opacity(0.96),
+                    in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
+                .strokeBorder(Theme.warn.opacity(0.6), lineWidth: 1)
+        )
     }
 }
 

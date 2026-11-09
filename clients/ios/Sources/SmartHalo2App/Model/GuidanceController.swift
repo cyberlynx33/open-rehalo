@@ -49,6 +49,8 @@ final class GuidanceController: ObservableObject {
         let remaining: Double         // metres
         let progress: Double          // 0…1
         let haloConnected: Bool
+        /// Riding the route the wrong way (matched engine).
+        var wrongWay = false
     }
 
     // MARK: Published state
@@ -100,6 +102,12 @@ final class GuidanceController: ObservableObject {
     /// Metres left of the lead-in to the route's start ("Lead me to the start"); nil when there is
     /// none or it's done.
     @Published private(set) var toStart: Double?
+    /// Riding the route the wrong way (matched engine, docs/MAP_MATCHING_SPEC.md §9.2).
+    @Published private(set) var wrongWay = false
+    /// The wrong-way banner can offer to invert the route (a GPX ride, lead-in done).
+    @Published private(set) var canInvert = false
+    /// Bumps when the wrong-way haptic should play: at most `maxWrongWayAlerts` in a row, ≥ 30 s apart.
+    @Published private(set) var wrongWayAlerts = 0
 
     var locationAuthorized: Bool {
         locationStatus == .authorizedWhenInUse || locationStatus == .authorizedAlways
@@ -113,7 +121,7 @@ final class GuidanceController: ObservableObject {
                         turn: offRoute ? .offRoute : nextTurn,
                         turnDistance: offRoute ? offRouteDistance : nextTurnDistance,
                         speed: speed, remaining: remainingDistance, progress: progress,
-                        haloConnected: connection.state == .connected)
+                        haloConnected: connection.state == .connected, wrongWay: wrongWay)
     }
 
     // MARK: Internals
@@ -131,6 +139,11 @@ final class GuidanceController: ObservableObject {
     private var haloWasConnected = false
     /// A real (non-demo) ride went to the background: ask for *Always* when the app is back.
     private var backgroundedWhileNavigating = false
+    /// Wrong-way haptics played since the rider last rode the right way, and when the last one did.
+    private var wrongWayAlertCount = 0
+    private var lastWrongWayAlert: Date?
+    private static let maxWrongWayAlerts = 3
+    private static let wrongWayAlertSpacing: TimeInterval = 30
 
     private var startedAt: Date?
     private var clockTask: Task<Void, Never>?
@@ -183,7 +196,7 @@ final class GuidanceController: ObservableObject {
         let texts = (leadIn?.instructions ?? []) + instructions
         let engine = RideEngine(route: ride.geometry, title: route.name, settings: ringSettings, instructions: texts,
                                 routedSteps: routedSteps, leadInLength: leadIn?.route.length ?? 0,
-                                joinNearest: joinNearest)
+                                joinNearest: joinNearest, engine: AppSettings.shared.navigationEngine)
         begin(ride, engine)
         RideRecorder.shared.begin(RideTrace.Header(engine: engine, title: route.name, instructions: texts,
                                                    routedSteps: routedSteps, joinNearest: joinNearest,
@@ -275,6 +288,30 @@ final class GuidanceController: ObservableObject {
 
     /// User pressed PARAR (after confirming): stop guiding, `navOff` to the ring, show the summary.
     func stop() { finish(completed: false) }
+
+    // MARK: - Wrong way (matched engine)
+
+    /// "Invert route" on the wrong-way banner: the same ride carries on along the route turned around,
+    /// from where the rider is (docs/MAP_MATCHING_SPEC.md §9.3). Not through `start`: the clock, the
+    /// distance ridden, the trace and the Live Activity carry on, and the ring gets no intro.
+    func invert() {
+        guard following, let route, let current = engine, let inverted = current.inverted() else { return }
+        engine = inverted.engine
+        self.route = GPXRoute(id: route.id, name: route.name, geometry: inverted.engine.route)
+        RideRecorder.shared.record(RideTrace.Entry(fix: nil, engine: inverted.engine, commands: inverted.commands,
+                                                   event: "invert"))
+        sendRing(inverted.commands)
+        apply(inverted.engine.snapshot)
+    }
+
+    /// "Ignore" on the wrong-way banner: silent until the rider rides the right way again.
+    func ignoreWrongWay() {
+        guard following, var ride = engine else { return }
+        ride.ignoreWrongWay()
+        engine = ride
+        RideRecorder.shared.record(RideTrace.Entry(fix: nil, engine: ride, commands: [], event: "ignoreWrongWay"))
+        apply(ride.snapshot)
+    }
 
     /// Clear the end-of-ride summary (summary "Done").
     func dismissSummary() { summary = nil }
@@ -383,7 +420,25 @@ final class GuidanceController: ObservableObject {
         distanceRidden = s.distanceRidden
         compassBearing = s.compassBearing
         toStart = s.toStart
+        updateWrongWay(s.wrongWay ?? false)
+        canInvert = s.canInvert ?? false
         fixCount = s.fixCount
+    }
+
+    /// The warning haptic on a new wrong-way warning: a few times, spaced out, and again only once the
+    /// rider has ridden the right way in between.
+    private func updateWrongWay(_ now: Bool) {
+        if now && !wrongWay {
+            let spaced = lastWrongWayAlert.map { Date().timeIntervalSince($0) >= Self.wrongWayAlertSpacing } ?? true
+            if wrongWayAlertCount < Self.maxWrongWayAlerts && spaced {
+                wrongWayAlertCount += 1
+                lastWrongWayAlert = Date()
+                wrongWayAlerts += 1
+            }
+        } else if !now && wrongWay && engine?.matcher?.last.wrongWay == WrongWayDetector.State.none {
+            wrongWayAlertCount = 0                  // rode the right way again (not just ignored)
+        }
+        wrongWay = now
     }
 
     // MARK: - Ring (official navigation)
