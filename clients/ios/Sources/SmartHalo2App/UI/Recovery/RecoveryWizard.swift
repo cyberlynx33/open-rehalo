@@ -150,9 +150,9 @@ private struct RecoveryWizardContent: View {
 
     private var message: LocalizedStringKey {
         switch step {
-        case 1: return "This Halo has a password from the old app. We'll generate a new one and save it in your Keychain."
+        case 1: return "This Halo has a password this iPhone doesn't know, probably from the old app. We'll reset it and give it this iPhone's password, kept in your Keychain."
         case 2: return "The Halo is un-paired. Due to a firmware quirk it keeps its old password until it restarts once: disconnect and reconnect the battery, or let it drain. Wait here — we'll notice when it comes back."
-        default: return "Your Halo is yours again. The new key is saved in this iPhone's Keychain."
+        default: return "Your Halo is yours again. Its password is kept in this iPhone's Keychain."
         }
     }
 
