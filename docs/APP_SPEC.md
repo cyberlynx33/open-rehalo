@@ -4,7 +4,7 @@ Goal: bring the features of the official SmartHalo app (`bike.smarthalo.app`) to
 on top of `SH2Protocol` (BLE) + `SH2Server` (optional self-hosted server). This spec is the
 implementation map: each **module** is a separate unit of work.
 
-The app's display name is **rehalo** and the current version is **0.1.0**, the first public release.
+The app's display name is **rehalo** and the current version is **0.1.1**, a patch on 0.1.0, the first public release.
 The milestones below keep the internal 2.x version numbers they were built under. Turn-by-turn
 navigation has shipped (M3, M8).
 
