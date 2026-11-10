@@ -207,6 +207,22 @@ final class RouteMatcherTests: XCTestCase {
         }
     }
 
+    /// "Start at the nearest point" on a loop: the ride is what is left from there, so joining at 70 %
+    /// and riding to the end arrives there, without the half of the whole loop a ride from its start needs.
+    func testJoiningALoopAtItsNearestPointArrivesAtItsEnd() {
+        let route = RideSim.route([(0, 0), (500, 0), (500, 500), (0, 500), (0, 0)])
+        for seed in seeds {
+            var sim = RideSim(seed: seed, sigma: 5)
+            var m = RouteMatcher(route: route, joinNearest: true)
+            var arrivedAt: Double?
+            for (fix, truth) in sim.ride(route, from: 1400) where arrivedAt == nil {
+                if m.update(fix).arrived { arrivedAt = truth }
+            }
+            XCTAssertNotNil(arrivedAt, "seed \(seed)")
+            XCTAssertGreaterThan(arrivedAt ?? 0, route.length - 75, "seed \(seed)")
+        }
+    }
+
     func testTwoLapCircuitArrivesAfterTheSecondLap() {
         let lap: [(Double, Double)] = [(0, 0), (300, 0), (300, 300), (0, 300), (0, 0)]
         let route = RideSim.route(lap + lap.dropFirst())

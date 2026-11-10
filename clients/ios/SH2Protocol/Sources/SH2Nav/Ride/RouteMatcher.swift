@@ -56,7 +56,8 @@ public struct RouteMatcher: Sendable {
         public var arrivalRadius = 50.0
         public var arrivalCoverage = 0.10
         /// On a loop (its end within `startWindow` of its start), the share of the whole loop: a rider
-        /// who sets off on the loop's last stretch, heading for its start, hasn't finished it.
+        /// who sets off on the loop's last stretch, heading for its start, hasn't finished it. Not
+        /// when the rider chose where to join it (`explicitJoin`): then what is left is the ride.
         public var loopArrivalCoverage = 0.5
         public init() {}
     }
@@ -138,6 +139,9 @@ public struct RouteMatcher: Sendable {
     var phase = Phase.off
     var joined = false
     var joinAlong: Double?
+    /// The rider chose where to join ("start at the nearest point", a route inverted under them): on
+    /// a loop, arrival counts what is left from there, not the whole loop.
+    var explicitJoin = false
     /// The furthest confident along on the route (for the lead-in rule).
     var progressAlong = 0.0
     var anchor: Anchor?
@@ -164,6 +168,7 @@ public struct RouteMatcher: Sendable {
         isLoop = route.points.count > 1
             && route.points[0].distance(to: route.points[route.points.count - 1]) <= parameters.startWindow
         wrongWay = WrongWayDetector()
+        explicitJoin = joinNearest
     }
 
     /// A matcher for `route` already on it at `along`, carrying on the rider's movement from `previous`:
@@ -178,6 +183,7 @@ public struct RouteMatcher: Sendable {
         phase = .on
         joined = true
         joinAlong = along
+        explicitJoin = true
         progressAlong = along
         everConfident = true
         anchor = Anchor(along: along, odometer: odometer, time: lastAccepted?.time ?? 0, gaps: 0)
@@ -328,10 +334,15 @@ public struct RouteMatcher: Sendable {
                 coverFrom = nil
             }
         }
-        let span = max(1, isLoop ? route.length : route.length - (joinAlong ?? 0))
+        // A loop counts coverage over all of it, so setting off on its last stretch doesn't "arrive"
+        // on passing its start; unless the rider chose where to join (start at the nearest point, a
+        // route inverted under them), when what is left from there is the ride: joined at 70 % of a
+        // loop, its end is the destination, not a lap and a half away.
+        let wholeLoop = isLoop && !explicitJoin
+        let span = max(1, wholeLoop ? route.length : route.length - (joinAlong ?? 0))
         let coverage = min(1, covered.reduce(0) { $0 + ($1.upperBound - $1.lowerBound) } / span)
         let arrived = phase == .on && confident && best.map { route.length - $0.along <= parameters.arrivalRadius } == true
-            && coverage >= (isLoop ? parameters.loopArrivalCoverage : parameters.arrivalCoverage)
+            && coverage >= (wholeLoop ? parameters.loopArrivalCoverage : parameters.arrivalCoverage)
 
         // §8: wrong way.
         var input = WrongWayDetector.Input(
