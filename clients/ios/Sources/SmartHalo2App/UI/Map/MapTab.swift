@@ -25,6 +25,8 @@ struct MapTab: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
+    /// The first `onAppear` places the camera; later ones (back from another tab) leave it alone.
+    @State private var appeared = false
     @State private var importError: String?
     @State private var showNav = false
     /// View controls (layers + 3D/2D). "3D" = the camera is tilted (the terrain is always 3D, so
@@ -167,12 +169,17 @@ struct MapTab: View {
         .onAppear {
             // The map opens on the rider: ask if Onboarding didn't get an answer.
             if !guidance.locationAuthorized && !guidance.locationDenied { guidance.requestLocationPermission() }
-            orientation = settings.mapOrientation
-            if orientation == .compass && guidance.locationAuthorized {
-                camera = .userLocation(followsHeading: true, fallback: userFallback)
-            } else {
-                if orientation == .compass { orientation = .north }    // no location: can't follow
-                frameSelection(animated: false)
+            if !appeared {
+                // Only once: `onAppear` also fires on every return from another tab, and reframing
+                // then would throw away wherever the rider had put the map.
+                appeared = true
+                orientation = settings.mapOrientation
+                if orientation == .compass && guidance.locationAuthorized {
+                    camera = .userLocation(followsHeading: true, fallback: userFallback)
+                } else {
+                    if orientation == .compass { orientation = .north }    // no location: can't follow
+                    frameSelection(animated: false)
+                }
             }
             consumePendingNavigation()
             if guidance.following || guidance.summary != nil { showNav = true }
