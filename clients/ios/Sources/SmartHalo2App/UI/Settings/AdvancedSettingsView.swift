@@ -35,6 +35,8 @@ private struct ObservedAdvancedList: View {
     @State private var confirmForgetPassword = false
     @State private var simulating = false
     @AppStorage(RideRecorder.enabledKey) private var recordRides = false
+    /// The newest recorded ride, read once on appear (not a directory listing per render).
+    @State private var lastRide: URL?
 
     init(controller: DeviceController?) {
         _box = StateObject(wrappedValue: ControllerBox(controller))
@@ -92,6 +94,7 @@ private struct ObservedAdvancedList: View {
             Text("Removes this phone's stored device password. You'll need to recover/re-pair to control the ring again.")
         }
         .task {
+            lastRide = RideRecorder.rides.first
             guard let controller, isReady else { return }
             await controller.refreshDeviceState()
         }
@@ -185,7 +188,7 @@ private struct ObservedAdvancedList: View {
             Toggle(isOn: $recordRides) {
                 Label("Record rides", systemImage: "record.circle")
             }
-            if let last = RideRecorder.rides.first {
+            if let last = lastRide {
                 ShareLink(item: last) {
                     Label("Share the last ride", systemImage: "square.and.arrow.up")
                 }

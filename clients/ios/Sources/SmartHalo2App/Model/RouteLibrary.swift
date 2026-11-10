@@ -30,6 +30,9 @@ final class RouteLibrary: ObservableObject {
 
     /// Route to open in the Routes tab (consumed and reset by `RoutesTab`).
     @Published var pendingDetail: UUID?
+    /// True while nothing has been imported yet (the Map tab's first-run hint). Kept up to date by
+    /// the imports and deletions, so reading it in a view body costs no fetch.
+    @Published private(set) var isEmpty = true
 
     private var routeCache: [UUID: GPXRoute] = [:]
     private var imageCache: [UUID: (size: Int, image: UIImage)] = [:]
@@ -45,6 +48,7 @@ final class RouteLibrary: ObservableObject {
             container = try! ModelContainer(for: SavedRoute.self,
                                             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         }
+        refreshIsEmpty()
     }
 
     // MARK: - Files
@@ -118,6 +122,7 @@ final class RouteLibrary: ObservableObject {
                                fileName: fileName, contentHash: hash)
         context.insert(saved)
         save()
+        isEmpty = false
         routeCache[id] = route
         Task { await ensureThumbnail(for: saved) }
         return saved
@@ -179,6 +184,7 @@ final class RouteLibrary: ObservableObject {
         if RouteSelection.shared.route?.id == id { RouteSelection.shared.clear() }
         context.delete(saved)
         save()
+        refreshIsEmpty()
     }
 
     func markUsed(_ saved: SavedRoute) {
@@ -203,8 +209,9 @@ final class RouteLibrary: ObservableObject {
         return true
     }
 
-    /// True while nothing has been imported yet (the Map tab's first-run hint).
-    var isEmpty: Bool { ((try? context.fetchCount(FetchDescriptor<SavedRoute>())) ?? 0) == 0 }
+    private func refreshIsEmpty() {
+        isEmpty = ((try? context.fetchCount(FetchDescriptor<SavedRoute>())) ?? 0) == 0
+    }
 
     // MARK: - Sharing
 
