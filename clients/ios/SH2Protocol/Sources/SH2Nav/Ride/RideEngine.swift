@@ -202,7 +202,7 @@ public struct RideEngine: Sendable {
 
     /// Feed one fix to the ring guidance — every fix, unfiltered, as the official app does.
     private mutating func guideRing(_ fix: RideFix, _ compassHeading: Double?) -> NavDirector.Result {
-        let accuracy = fix.horizontalAccuracy >= 0 ? Int(fix.horizontalAccuracy.rounded()) : 999
+        let accuracy = fix.horizontalAccuracy >= 0 ? NavMath.trunc(fix.horizontalAccuracy.rounded()) : 999
         let loc = NavLocation(fix.lat, fix.lon, accuracy: accuracy)
         if compass != nil {
             // The iPhone compass only while slow or stopped; moving, the GPS direction.

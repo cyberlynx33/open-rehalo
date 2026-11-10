@@ -441,7 +441,7 @@ public struct NavGuidance: Sendable {
         let target = match?.target ?? closestLocationOnNearbyPath(loc, cur, next)
         guard target.exists else { return }
         let d = loc.distance(to: target)
-        display.distanceToThisManeuver = Int(d.rounded())
+        display.distanceToThisManeuver = NavMath.trunc(d.rounded())
         let brg = Int(loc.bearing(to: target))
         let crow = bearing.crowFlies != NavBearing.unknown ? bearing.crowFlies : (match?.travel ?? NavBearing.unknown)
         let headingToPath = crow != NavBearing.unknown && NavMath.smallerGap(crow, brg) < 40

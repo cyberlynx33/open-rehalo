@@ -90,6 +90,15 @@ final class CommandsTests: XCTestCase {
         XCTAssertEqual(avg.count, 24)
     }
 
+    /// A speed that isn't a number, or is absurd, makes a harmless card rather than a trap in `Int(_:)`.
+    func testCarouselSpeedsSurviveBadNumbers() {
+        let mask: UInt16 = 0x02dc
+        XCTAssertEqual([UInt8](Commands.carouselSpeed(mask: mask, kmh: .nan)).suffix(3), [0, 0, 0])
+        XCTAssertEqual([UInt8](Commands.carouselSpeed(mask: mask, kmh: 1e30)).suffix(3), [100, 255, 0])
+        let avg = [UInt8](Commands.carouselAvgSpeed(mask: mask, averageKmh: .nan, currentKmh: .infinity))
+        XCTAssertEqual(Array(avg[7..<15]), [0, 0, 0, 0, 0x7f, 0xff, 0xff, 0xff])
+    }
+
     func testAlarmSoundTouchLayouts() {
         let seed = Data([0xAA, 0xBB, 0xCC, 0xDD])
         // configureAlarm (official): [3,3, seed(4), tapCode, tapLength, armed, vigilant]

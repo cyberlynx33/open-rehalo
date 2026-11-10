@@ -415,7 +415,7 @@ public struct NavDirector: Sendable {
     /// `(int) destination.distanceTo(currentLocation)`, from the previous fix.
     var distanceToDestination: Int {
         guard let g = guidance, let loc = currentLocation else { return 0 }
-        return Int(g.destination.distance(to: loc))
+        return NavMath.trunc(g.destination.distance(to: loc))
     }
 
     // MARK: - Text and colours

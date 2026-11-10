@@ -220,9 +220,9 @@ public enum Commands {
     /// else gauge `speed / 40 × 100 %`; `[percentage, speed, unit]`, unit 0 = km/h, 1 = mph.
     public static func carouselSpeed(mask: UInt16, kmh: Double, metric: Bool = true) -> Data {
         let moving = kmh >= 5
-        let pct = moving ? UInt8(min(100, (kmh / 40 * 100).rounded())) : 0
+        let pct = moving ? UInt8(clamping: NavMath.trunc(min(100, (kmh / 40 * 100).rounded()))) : 0
         let shown = metric ? kmh : kmh / 1.609344
-        let speed = moving ? UInt8(clamping: Int(shown.rounded())) : 0
+        let speed = moving ? UInt8(clamping: NavMath.trunc(shown.rounded())) : 0
         return Data(carouselHeader(.speed, mask: mask) + [pct, speed, metric ? 0 : 1])
     }
 
@@ -243,8 +243,8 @@ public enum Commands {
                                         metric: Bool = true) -> Data {
         let lower = NavColour.caution, average = Colour.white, higher = NavColour.turn
         return Data(carouselHeader(.avgSpeed, mask: mask)
-                    + metric4(Int((averageKmh * 1000).rounded()), metric: metric)
-                    + metric4(Int((currentKmh * 1000).rounded()), metric: metric)
+                    + metric4(NavMath.trunc((averageKmh * 1000).rounded()), metric: metric)
+                    + metric4(NavMath.trunc((currentKmh * 1000).rounded()), metric: metric)
                     + [lower.hue, lower.saturation, lower.lightness,
                        average.hue, average.saturation, average.lightness,
                        higher.hue, higher.saturation, higher.lightness])
