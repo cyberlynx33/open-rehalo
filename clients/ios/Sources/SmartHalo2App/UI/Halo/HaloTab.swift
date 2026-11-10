@@ -140,7 +140,7 @@ struct HaloHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 HaloHero(name: name, state: connection.state, lightOn: controller.lightOn,
-                         brightness: controller.brightness / 255, blinking: controller.blinking,
+                         brightness: controller.brightness / 100, blinking: controller.blinking,
                          armed: settings.alarmOn && settings.alarmTapCode != nil,
                          card: isReady ? preview : nil, controller: controller)
                 LowBatteryBanner(controller: controller)
@@ -288,7 +288,7 @@ struct HaloHomeView: View {
     }
 
     private var lightDetail: String {
-        let pct = (controller.brightness / 255).formatted(.percent.precision(.fractionLength(0)))
+        let pct = (controller.brightness / 100).formatted(.percent.precision(.fractionLength(0)))
         let mode = controller.blinking ? String(localized: "Blinking") : String(localized: "Steady")
         return "\(pct) · \(mode)"
     }
@@ -827,12 +827,13 @@ struct LightSheet: View {
                 HStack {
                     Text("Brightness").font(.body.weight(.semibold))
                     Spacer()
-                    Text(verbatim: (controller.brightness / 255)
+                    Text(verbatim: (controller.brightness / 100)
                         .formatted(.percent.precision(.fractionLength(0))))
                         .font(Theme.metricFont(.body))
                         .foregroundStyle(Theme.accent)
                 }
-                Slider(value: $controller.brightness, in: 13...255, step: 1) { editing in
+                // The firmware's range: under 10 % the LED is as good as off, over 100 % is 100 %.
+                Slider(value: $controller.brightness, in: 10...100, step: 1) { editing in
                     if !editing { Task { await controller.applyLightSettings() } }
                 }
                 .accessibilityLabel(Text("Brightness"))

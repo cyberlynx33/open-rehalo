@@ -27,7 +27,9 @@ final class DeviceController: ObservableObject {
     @Published var lightOn = false
     /// The ring's carousel card, as it last reported it (BLE notification 5,2); 0 = Navigation.
     @Published private(set) var carouselCard: UInt8?
-    @Published var brightness: Double = 128      // 0...255
+    /// Front light brightness, a percentage in the firmware's 10…100 range (`{1,16}`), and its mode.
+    /// The ring doesn't report them: these are the last values this app applied, kept per ring.
+    @Published var brightness: Double = 100
     @Published var blinking = false
     /// The Halo's alarm configuration was last applied OK on this connection (`alarmConfigure`).
     @Published private(set) var alarmSynced = false
@@ -80,6 +82,7 @@ final class DeviceController: ObservableObject {
         self.central = central
         self.demoTransport = demoTransport
         loadBatteryCache()
+        loadLightCache()
     }
 
     // MARK: - Lifecycle
@@ -285,6 +288,8 @@ final class DeviceController: ObservableObject {
         await refreshDeviceState()
         await syncAlarm()
         await applyRingCards()
+        // The ring keeps the light's mode in RAM only: give it back what the rider chose.
+        if lightSettingsApplied { await applyLightSettings(silently: true) }
     }
 
     func close() {
@@ -325,13 +330,45 @@ final class DeviceController: ObservableObject {
         } catch { statusMessage = String(localized: "front light failed: \(describe(error))") }
     }
 
-    func applyLightSettings() async {
+    /// Send the light's brightness and mode. The ring stores its blink lock only from the 3-byte form
+    /// of `{1,16}` and ships locked (blinking silently becomes steady), so the first time blinking is
+    /// wanted that form goes out, its mode rocker showing once on the OLED; afterwards the 4-byte
+    /// form, silent (`silently`) when it only restores the settings on a reconnect.
+    func applyLightSettings(silently: Bool = false) async {
         guard let session = readySession else { return }
         let mode: Commands.LightMode = blinking ? .blinking : .normal
-        let level = UInt8(max(0, min(255, brightness.rounded())))
+        let level = UInt8(max(10, min(100, brightness.rounded())))
+        let needsUnlock = blinking && !blinkUnlocked
+        let cmd = needsUnlock
+            ? Commands.frontLightUnlockBlinking(mode: mode, brightness: level)
+            : Commands.frontLightSettings(mode: mode, brightness: level, silenceRocker: silently)
         do {
-            _ = try await session.transceive(Commands.frontLightSettings(mode: mode, brightness: level))
+            _ = try await session.transceive(cmd, label: "lightSettings")
+            if needsUnlock { blinkUnlocked = true }
+            saveLightCache()
         } catch { statusMessage = String(localized: "light settings failed: \(describe(error))") }
+    }
+
+    // MARK: - Front light settings (per ring)
+
+    private var lightKey: String { "sh2.light.\(deviceID)" }
+    /// This app has cleared the ring's blink lock (the 3-byte `{1,16}`); the ring keeps it in flash.
+    private var blinkUnlocked = false
+    /// Light settings were applied to this ring at least once: there is something to restore.
+    private var lightSettingsApplied = false
+
+    private func loadLightCache() {
+        guard let c = UserDefaults.standard.dictionary(forKey: lightKey) else { return }
+        if let b = c["brightness"] as? Double { brightness = b }
+        blinking = c["blinking"] as? Bool ?? false
+        blinkUnlocked = c["unlocked"] as? Bool ?? false
+        lightSettingsApplied = true
+    }
+
+    private func saveLightCache() {
+        lightSettingsApplied = true
+        UserDefaults.standard.set(["brightness": brightness, "blinking": blinking, "unlocked": blinkUnlocked],
+                                  forKey: lightKey)
     }
 
     // MARK: - Ring effects (animations) + device settings
