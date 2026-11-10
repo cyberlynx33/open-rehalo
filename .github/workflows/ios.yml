@@ -13,6 +13,10 @@ on:
     paths: ['clients/ios/**']
   workflow_dispatch: {}
 
+# The build job only reads the repo; the release job raises its own token to contents: write.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-26            # Xcode 26: MapKit's cycling directions need Swift 6.2
