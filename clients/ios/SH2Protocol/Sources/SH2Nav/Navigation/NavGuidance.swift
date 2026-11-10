@@ -594,6 +594,13 @@ public struct NavGuidance: Sendable {
     }
 
     /// `checkForOrientationReroute`.
+    ///
+    /// Kept as the original, blind spot included: `ClosestPathLocation` always lands on a projection
+    /// (`index = i + 1`), so with the rider's nearest point at a vertex one of the three bearings
+    /// below goes to that same point, which `bearing(to:)` gives as 180, and the ≥ 161 tests only
+    /// pass with a neighbour due south. The check then falls through to `seg = rider`, no reroute,
+    /// right before the vertex, where it would matter most. Riding the wrong way is caught by
+    /// distance on leaving the stretch (`navigation.md` §8); the matched engine has its own detector.
     static func orientationReroute(_ turnStarted: Bool, _ rider: Int, _ path: [NavLocation],
                                    _ loc: NavLocation) -> Bool {
         if rider == NavBearing.unknown || turnStarted { return false }
