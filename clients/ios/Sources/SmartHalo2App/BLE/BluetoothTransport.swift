@@ -126,7 +126,7 @@ final class BluetoothTransport: NSObject, Transport, @unchecked Sendable {
         }
     }
 
-    func writeNoResponse(uuid: String, data: Data) async throws {
+    func write(uuid: String, data: Data) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             queue.async {
                 if self.disconnected { cont.resume(throwing: TransportError.disconnected); return }

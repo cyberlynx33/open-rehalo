@@ -11,7 +11,7 @@ public struct SH2Notification: Sendable {
 }
 
 /// Abstract BLE transport the `Session` drives. Mirrors the duck-typed `Transport` in
-/// `sh2-core/src/session.mjs` (`writeNoResponse` + `subscribe`), adapted to Swift concurrency.
+/// `sh2-core/src/session.mjs` (`write` + `subscribe`), adapted to Swift concurrency.
 ///
 /// The concrete iOS implementation is `BluetoothTransport` (CoreBluetooth). A mock conformer is
 /// trivial to write for `swift test` on macOS.
@@ -24,8 +24,11 @@ public protocol Transport: AnyObject, Sendable {
     /// Equivalent to the `subscribe(...)` calls in the JS `Session.open`.
     func enableNotifications() async throws
 
-    /// Write a chunk with *Write Without Response* to the given characteristic.
-    func writeNoResponse(uuid: String, data: Data) async throws
+    /// Write a chunk to the given characteristic and return once the device has acknowledged it:
+    /// a **write with response**. The ring's characteristics are write-with-response only
+    /// (`bleapp.c:700-702`, no `write_wo_resp`), so a write without response is dropped and the
+    /// command never arrives.
+    func write(uuid: String, data: Data) async throws
 
     /// Ordered stream of every incoming notification. The `Session` is the sole consumer.
     func notificationStream() -> AsyncStream<SH2Notification>

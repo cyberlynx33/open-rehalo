@@ -39,7 +39,7 @@ final class AuthSessionTests: XCTestCase {
             return stream
         }
 
-        func writeNoResponse(uuid: String, data: Data) async throws {
+        func write(uuid: String, data: Data) async throws {
             lock.lock(); defer { lock.unlock() }
             let u = uuid.uppercased()
             if Frame.UUIDs.payload.contains(u) { acc.append(data); return }

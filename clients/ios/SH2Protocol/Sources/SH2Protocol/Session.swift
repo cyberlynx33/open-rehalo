@@ -255,10 +255,10 @@ public actor Session {
     private func sendFrames(_ encoded: Frame.Encoded) async {
         do {
             for (i, chunk) in encoded.chunks.enumerated() {
-                try await transport.writeNoResponse(uuid: Frame.UUIDs.payload[i], data: chunk)
+                try await transport.write(uuid: Frame.UUIDs.payload[i], data: chunk)
             }
             // The CTRL write triggers processing on the device (`bslink_recv`).
-            try await transport.writeNoResponse(uuid: Frame.UUIDs.ctrl, data: encoded.ctrl)
+            try await transport.write(uuid: Frame.UUIDs.ctrl, data: encoded.ctrl)
         } catch {
             failPending(error)
         }

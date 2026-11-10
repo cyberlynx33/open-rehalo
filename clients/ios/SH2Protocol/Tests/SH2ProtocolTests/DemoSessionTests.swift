@@ -22,7 +22,7 @@ final class DemoSessionTests: XCTestCase {
         func enableNotifications() async throws {}
         func notificationStream() -> AsyncStream<SH2Notification> { stream }
 
-        func writeNoResponse(uuid: String, data: Data) async throws {
+        func write(uuid: String, data: Data) async throws {
             lock.lock(); defer { lock.unlock() }
             let u = uuid.uppercased()
             if Frame.UUIDs.payload.contains(u) {

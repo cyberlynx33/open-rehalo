@@ -41,7 +41,7 @@ final class MockTransport: Transport, @unchecked Sendable {
 
     func notificationStream() -> AsyncStream<SH2Notification> { stream }
 
-    func writeNoResponse(uuid: String, data payload: Data) async throws {
+    func write(uuid: String, data payload: Data) async throws {
         lock.lock(); defer { lock.unlock() }
         let u = uuid.uppercased()
         if Frame.UUIDs.payload.contains(u) {
