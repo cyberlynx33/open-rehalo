@@ -19,10 +19,20 @@ final class BluetoothTransport: NSObject, Transport, @unchecked Sendable {
         case notifyFailed(String)
         case disconnected
         case writeFailed(String)
+        /// Discovery or CCCD enabling got no callback in `setupTimeout`.
+        case timedOut(String)
     }
+
+    /// Backstop for service discovery and CCCD enabling. CoreBluetooth doesn't always call back
+    /// (a link that drops in between, Bluetooth switched off), and without it `connect()` would wait
+    /// forever; the ring kicks an unauthenticated central out after 60 s anyway.
+    static let setupTimeout: DispatchTimeInterval = .seconds(15)
 
     private let peripheral: CBPeripheral
     private let queue: DispatchQueue
+
+    /// The peripheral this transport belongs to (so a disconnect of another ring is ignored).
+    var peripheralID: UUID { peripheral.identifier }
 
     /// Discovered characteristics keyed by uppercased UUID string.
     private var characteristics: [String: CBCharacteristic] = [:]
@@ -63,13 +73,16 @@ final class BluetoothTransport: NSObject, Transport, @unchecked Sendable {
     func notificationStream() -> AsyncStream<SH2Notification> { stream }
 
     /// Called by `BluetoothCentral` when the peripheral disconnects. Finishes the notification
-    /// stream, which ends the `Session` consumer loop and fails any in-flight request.
+    /// stream, which ends the `Session` consumer loop, and fails whatever was waiting on this link:
+    /// service discovery, CCCD enabling or a write. CoreBluetooth gives no callback for a request
+    /// made on a peripheral that is no longer connected, so without this `connect()` would hang.
     func handleDisconnect() {
         queue.async {
             guard !self.disconnected else { return }
             self.disconnected = true
             self.streamContinuation.finish()
-            // Fail a write that was awaiting its response.
+            self.resumeDiscover(throwing: TransportError.disconnected)
+            self.resumeNotify(throwing: TransportError.disconnected)
             let cont = self.writeContinuation
             self.writeContinuation = nil
             cont?.resume(throwing: TransportError.disconnected)
@@ -82,8 +95,12 @@ final class BluetoothTransport: NSObject, Transport, @unchecked Sendable {
     func discover() async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             queue.async {
+                if self.disconnected { cont.resume(throwing: TransportError.disconnected); return }
                 self.discoverContinuation = cont
                 self.peripheral.discoverServices([CBUUID(string: Frame.UUIDs.service)])
+                self.queue.asyncAfter(deadline: .now() + Self.setupTimeout) { [weak self] in
+                    self?.resumeDiscover(throwing: TransportError.timedOut("service discovery"))
+                }
             }
         }
     }
@@ -93,6 +110,7 @@ final class BluetoothTransport: NSObject, Transport, @unchecked Sendable {
     func enableNotifications() async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             queue.async {
+                if self.disconnected { cont.resume(throwing: TransportError.disconnected); return }
                 let notifyChars = Frame.UUIDs.allNotify.compactMap { self.characteristics[$0] }
                 guard !notifyChars.isEmpty else {
                     cont.resume(throwing: TransportError.serviceNotFound); return
@@ -101,6 +119,9 @@ final class BluetoothTransport: NSObject, Transport, @unchecked Sendable {
                 self.notifyRemaining = notifyChars.count
                 self.notifyFinished = false
                 for ch in notifyChars { self.peripheral.setNotifyValue(true, for: ch) }
+                self.queue.asyncAfter(deadline: .now() + Self.setupTimeout) { [weak self] in
+                    self?.resumeNotify(throwing: TransportError.timedOut("enabling notifications"))
+                }
             }
         }
     }
@@ -161,17 +182,11 @@ extension BluetoothTransport: CBPeripheralDelegate {
                     error: Error?) {
         guard !notifyFinished else { return }
         if let error {
-            notifyFinished = true
-            let cont = notifyContinuation; notifyContinuation = nil
-            cont?.resume(throwing: TransportError.notifyFailed(error.localizedDescription))
+            resumeNotify(throwing: TransportError.notifyFailed(error.localizedDescription))
             return
         }
         notifyRemaining -= 1
-        if notifyRemaining <= 0 {
-            notifyFinished = true
-            let cont = notifyContinuation; notifyContinuation = nil
-            cont?.resume()
-        }
+        if notifyRemaining <= 0 { resumeNotify(throwing: nil) }
     }
 
     func peripheral(_ peripheral: CBPeripheral,
@@ -198,6 +213,15 @@ extension BluetoothTransport: CBPeripheralDelegate {
     private func resumeDiscover(throwing error: Error?) {
         guard let cont = discoverContinuation else { return }
         discoverContinuation = nil
+        if let error { cont.resume(throwing: error) } else { cont.resume() }
+    }
+
+    /// Resume `enableNotifications()` once, whatever ends it first: the last CCCD callback, an
+    /// error, the disconnect or the backstop timer.
+    private func resumeNotify(throwing error: Error?) {
+        guard let cont = notifyContinuation else { return }
+        notifyContinuation = nil
+        notifyFinished = true
         if let error { cont.resume(throwing: error) } else { cont.resume() }
     }
 }
