@@ -6529,19 +6529,19 @@
         }
       }
     },
-    "This Halo has a password from the old app. We'll generate a new one and save it in your Keychain." : {
+    "This Halo has a password this iPhone doesn't know, probably from the old app. We'll reset it and give it this iPhone's password, kept in your Keychain." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This Halo has a password from the old app. We'll generate a new one and save it in your Keychain."
+            "value" : "This Halo has a password this iPhone doesn't know, probably from the old app. We'll reset it and give it this iPhone's password, kept in your Keychain."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este Halo tiene una contraseña de la app antigua. Generaremos una nueva y la guardaremos en tu Llavero."
+            "value" : "Este Halo tiene una contraseña que este iPhone no conoce, seguramente de la app antigua. La restableceremos y le pondremos la contraseña de este iPhone, guardada en tu Llavero."
           }
         }
       }
@@ -7481,19 +7481,19 @@
         }
       }
     },
-    "Your Halo is yours again. The new key is saved in this iPhone's Keychain." : {
+    "Your Halo is yours again. Its password is kept in this iPhone's Keychain." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your Halo is yours again. The new key is saved in this iPhone's Keychain."
+            "value" : "Your Halo is yours again. Its password is kept in this iPhone's Keychain."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tu Halo vuelve a ser tuyo. La nueva clave está guardada en el Llavero de este iPhone."
+            "value" : "Tu Halo vuelve a ser tuyo. Su contraseña está guardada en el Llavero de este iPhone."
           }
         }
       }

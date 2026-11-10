@@ -62,13 +62,19 @@ public enum Recovery {
     public static func repair(session: Session, newPassword: String = generateDevicePassword()) async throws -> String {
         SH2Log.log("recovery: step 3/3 re-pair — handshake with empty password")
         try await session.handshake(password: "")   // un-paired device → empty auth OK
-        SH2Log.log("recovery: setPassword (new 32-char password)")
-        let r = try await session.transceive(Commands.setPassword(Data(newPassword.utf8)), crypted: true, label: "setPassword")
+        try await setPassword(session: session, newPassword)
+        SH2Log.log("recovery: DONE — new password set and owned")
+        return newPassword
+    }
+
+    /// Store `password` on the ring (`setPassword`, encrypted). Needs an authenticated session; on
+    /// an un-paired ring the empty password authenticates. The firmware takes 32 bytes.
+    public static func setPassword(session: Session, _ password: String) async throws {
+        SH2Log.log("recovery: setPassword (32-char password)")
+        let r = try await session.transceive(Commands.setPassword(Data(password.utf8)), crypted: true, label: "setPassword")
         guard [UInt8](r).first == ReturnCode.ok.rawValue else {
             throw RecoveryError.commandFailed(step: "setPassword", code: [UInt8](r).first)
         }
-        SH2Log.log("recovery: DONE — new password set and owned")
-        return newPassword
     }
 
     /// Full recovery: reset-challenge + re-pair with a fresh password. Port of `recoverAccess`.

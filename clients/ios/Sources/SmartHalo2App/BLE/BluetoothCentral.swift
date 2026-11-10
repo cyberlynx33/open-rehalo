@@ -144,6 +144,13 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
                 self.intentionalDisconnects.remove(peripheral.identifier)
                 self.connectContinuation = cont
                 self.connectingPeripheral = peripheral
+                // Diagnostics: already connected to this iPhone means a link the previous launch
+                // left up, or another app's. Either way the ring may still be on someone else's keys.
+                let service = CBUUID(string: Frame.UUIDs.service)
+                if self.manager.retrieveConnectedPeripherals(withServices: [service])
+                    .contains(where: { $0.identifier == peripheral.identifier }) {
+                    SH2Log.log("central: the Halo is already connected to this iPhone (a link left up by the previous launch, or another app)")
+                }
                 self.manager.connect(peripheral, options: nil)
             }
         }

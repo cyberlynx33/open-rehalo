@@ -4,7 +4,7 @@ Goal: bring the features of the official SmartHalo app (`bike.smarthalo.app`) to
 on top of `SH2Protocol` (BLE) + `SH2Server` (optional self-hosted server). This spec is the
 implementation map: each **module** is a separate unit of work.
 
-The app's display name is **rehalo** and the current version is **0.1.0**, the first public release.
+The app's display name is **rehalo** and the current version is **0.1.1**, a patch on 0.1.0, the first public release.
 The milestones below keep the internal 2.x version numbers they were built under. Turn-by-turn
 navigation has shipped (M3, M8).
 
@@ -283,7 +283,9 @@ ride recording, auto light/alarm automations.
 - **Recovery wizard** (modal, opened when the handshake reports `.needsRecovery` — from pairing or the
   chip): step 1 explain → `recover()`; step 2 reboot instructions, auto-advance when the device
   reappears (manual "I've rebooted it" fallback) → `reconnectAndFinish()`; step 3 done. The new
-  password is not shown (reachable in Advanced).
+  password is not shown (reachable in Advanced). `.needsRecovery` only follows a `RET_FAIL` to every
+  stored password and the empty one; an un-paired ring gets the saved password back without the
+  wizard, and a recovery reuses it (`docs/protocol/pairing.md`, "When a ring stops taking a password").
 - **Implemented (v1.6.0):** `UI/Onboarding/OnboardingView.swift` (replaces the old server/BLE
   choice screen) — Welcome (turning accent ring, static with Reduce Motion) → Pair (auto-scan on
   appear, radar pulses, "Found" list, a lone Halo highlighted, RSSI hint, tap → `pair(with:)` with

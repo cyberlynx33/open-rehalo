@@ -34,6 +34,13 @@ public enum Crypto {
             self.iv = iv
             self.secret = secret
         }
+
+        /// Rebuild the keys from a stored `secret` (32 bytes: key ‖ IV).
+        public init?(secret: Data) {
+            guard secret.count == 32 else { return nil }
+            let s = Data(secret)   // indices from 0
+            self.init(key: s.subdata(in: 0..<16), iv: s.subdata(in: 16..<32), secret: s)
+        }
     }
 
     // MARK: - ECDH (P-256)

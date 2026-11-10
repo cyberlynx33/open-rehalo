@@ -9,7 +9,7 @@ final class DeviceController: ObservableObject {
     enum Phase: Equatable {
         case connecting
         case authenticating
-        case needsRecovery          // paired with an unknown password, or no saved password
+        case needsRecovery          // the ring rejected every stored password and the empty one
         case recovering
         case needsReboot            // un-pair done; the ring must power-cycle to finish (see recover())
         case ready
@@ -62,6 +62,13 @@ final class DeviceController: ObservableObject {
 
     private var transport: Transport?
     private var session: Session?
+    /// The session once the ring has accepted a password. Commands go through this one: sent
+    /// during a handshake or a recovery, a command would take the session's single request slot
+    /// between two of its steps and make that step fail.
+    private var readySession: Session? { phase == .ready ? session : nil }
+    /// Bumped by every `start()` and `close()`: a `start()` that fails only lets go of the link if
+    /// no newer `start()`/`close()` has taken it over meanwhile.
+    private var linkGeneration = 0
     /// Re-applies the rider's card mask after a "show now" of a hidden card.
     private var cardMaskRestore: Task<Void, Never>?
     /// Demo only: a simulated "password rejected" is pending (`simulateNeedsRecovery()`), so
@@ -77,7 +84,12 @@ final class DeviceController: ObservableObject {
 
     // MARK: - Lifecycle
 
-    func start() async {
+    /// Connect and authenticate. `only` tries that password alone (Settings › Advanced › Enter a
+    /// saved password); otherwise every password this iPhone has for the ring is tried (see
+    /// `authenticate`).
+    func start(only typed: String? = nil) async {
+        linkGeneration &+= 1
+        let generation = linkGeneration
         do {
             phase = .connecting
             statusMessage = "Connecting…"
@@ -111,29 +123,95 @@ final class DeviceController: ObservableObject {
             self.session = session
             try await session.open()
 
-            if let saved = KeychainStore.load(deviceID: deviceID) {
-                phase = .authenticating
-                statusMessage = "Authenticating…"
-                do {
-                    try await session.handshake(password: saved)
-                    await finishReady()
-                } catch {
-                    // Saved password no longer valid (re-paired elsewhere) → offer recovery.
-                    statusMessage = "Saved password rejected. Recovery required."
-                    phase = .needsRecovery
-                }
-            } else if await adoptOtherPassword(session: session) {
+            phase = .authenticating
+            statusMessage = "Authenticating…"
+            let accepted = try await authenticate(session, only: typed)
+            // A close() or a newer start() took over meanwhile: the phase is theirs.
+            guard generation == linkGeneration else { return }
+            if accepted {
                 await finishReady()
             } else {
-                statusMessage = "No saved password for this device. Recovery required."
+                statusMessage = KeychainStore.load(deviceID: deviceID) == nil
+                    ? "No saved password for this device. Recovery required."
+                    : "Saved password rejected. Recovery required."
                 phase = .needsRecovery
             }
         } catch {
+            guard generation == linkGeneration else { return }
+            // A timeout, a dropped link, a reply that doesn't decode: nothing to do with the
+            // password, so no recovery. Let go of the link (the ring only forgets a half-done
+            // handshake when the link drops); `HaloConnection` reconnects with backoff.
+            SH2Log.log("connection: \(describe(error)) — will retry")
+            if !isDemo { close() }
             phase = .error(describe(error))
         }
     }
 
-    /// Run the reset-challenge + re-pair recovery flow, then persist the new password.
+    /// Authenticate over a fresh link. Tries, in order: this iPhone's password for the ring, the
+    /// one it replaced, those stored for other peripheral identifiers (another iPhone's, synced
+    /// through iCloud Keychain) and the empty password. True once the ring accepted one; false only
+    /// when it answered `RET_FAIL` to all of them, the one case that needs a recovery. Link
+    /// failures throw.
+    ///
+    /// The ring checks against the password it loaded from flash at boot (`auth_init`), and the
+    /// STM32 power-cycles the BLE chip on every boot and standby change, so a ring can come back
+    /// without the password it accepted before:
+    /// - none, after `resetPassword` (it clears flash only) and a reboot. The empty password gets
+    ///   in, and the ring gets this iPhone's password back: no reset, no reboot, same password;
+    /// - an older one, when it acknowledged a `setPassword` whose flash write was dropped (`rec_write`
+    ///   gives up when its queue is full or flash stays full after GC). The previous one gets in.
+    ///
+    /// The keys of the last handshake are kept so a relaunched app can take over the link a killed
+    /// one left up: the ring still encrypts with them (`Session.establishLink(resuming:)`).
+    private func authenticate(_ session: Session, only typed: String?) async throws -> Bool {
+        let sync = AppSettings.shared.syncPasswordsToICloud
+        let previous = KeychainStore.loadLinkKeys(deviceID: deviceID).flatMap { Crypto.LinkKeys(secret: $0) }
+        let keys = try await session.establishLink(resuming: previous)
+        KeychainStore.saveLinkKeys(keys.secret, deviceID: deviceID)
+
+        if let typed {
+            guard try await session.authenticate(password: Data(typed.utf8)) else { return false }
+            try? KeychainStore.save(password: typed, deviceID: deviceID, synchronizable: sync)
+            return true
+        }
+
+        let saved = KeychainStore.load(deviceID: deviceID)
+        if let saved, try await session.authenticate(password: Data(saved.utf8)) { return true }
+
+        // Capped: each try is one round trip, and a keychain full of stale entries shouldn't stall
+        // the connection.
+        for candidate in KeychainStore.fallbackPasswords(deviceID: deviceID).prefix(5) {
+            statusMessage = "Trying an earlier password…"
+            guard try await session.authenticate(password: Data(candidate.utf8)) else { continue }
+            try? KeychainStore.save(password: candidate, deviceID: deviceID, synchronizable: sync)
+            SH2Log.log("auth: the ring took an earlier stored password — keeping it")
+            return true
+        }
+
+        guard try await session.authenticate(password: Data()) else { return false }
+        statusMessage = "Re-pairing…"
+        let password = reusablePassword(saved) ?? Recovery.generateDevicePassword()
+        // Stored before the ring has it: if the reply is lost, the next connection still has it.
+        try KeychainStore.save(password: password, deviceID: deviceID, synchronizable: sync)
+        try await Recovery.setPassword(session: session, password)
+        if password == saved {
+            SH2Log.log("auth: the ring had no password (un-paired) — gave it back this iPhone's")
+        } else {
+            SH2Log.log("auth: the ring had no password (un-paired) — paired it with a new one")
+            newlyGeneratedPassword = password
+        }
+        return true
+    }
+
+    /// `saved` if the firmware can store it as is (`auth_setPassword` takes 32 bytes).
+    private func reusablePassword(_ saved: String?) -> String? {
+        guard let saved, saved.utf8.count == 32 else { return nil }
+        return saved
+    }
+
+    /// Run the reset-challenge + re-pair recovery flow. The ring gets the password this iPhone
+    /// already has for it, if any (other iPhones and password managers that know it keep working),
+    /// or a new one.
     ///
     /// Two phases, because of a firmware quirk: `resetPassword` clears the stored password in flash,
     /// but the device keeps the OLD password in RAM until it next boots (`auth_init` only loads it at
@@ -147,13 +225,18 @@ final class DeviceController: ObservableObject {
             // 1. Un-pair (clears the stored password in flash). Idempotent — safe to repeat.
             statusMessage = "Un-pairing (reset-challenge)…"
             try await Recovery.resetPairing(session: session)
-            // 2. Re-pair with a fresh password (only works once the ring has rebooted).
+            // 2. Re-pair (only works once the ring has rebooted). The password is stored first, so
+            //    the ring never ends up with one this iPhone doesn't have; after the reboot,
+            //    `start()` hands it to the un-paired ring.
             statusMessage = "Re-pairing…"
+            let saved = KeychainStore.load(deviceID: deviceID)
+            let password = reusablePassword(saved) ?? Recovery.generateDevicePassword()
+            try KeychainStore.save(password: password, deviceID: deviceID,
+                                   synchronizable: AppSettings.shared.syncPasswordsToICloud)
             do {
-                let newPassword = try await Recovery.repair(session: session)
-                try KeychainStore.save(password: newPassword, deviceID: deviceID,
-                                       synchronizable: AppSettings.shared.syncPasswordsToICloud)
-                newlyGeneratedPassword = newPassword
+                try await Recovery.repair(session: session, newPassword: password)
+                if let keys = await session.linkKeys { KeychainStore.saveLinkKeys(keys.secret, deviceID: deviceID) }
+                if password != saved { newlyGeneratedPassword = password }
                 await finishReady()
             } catch let e as Session.SessionError {
                 // Empty-password authenticate rejected → the ring still holds its old password in
@@ -171,8 +254,9 @@ final class DeviceController: ObservableObject {
     }
 
     /// Finish the recovery after the user has power-cycled the ring: reconnect to the (now rebooted)
-    /// device and re-run the recovery. After a reboot the firmware has reloaded an empty password, so
-    /// the empty-password re-pair now succeeds and a fresh password is set.
+    /// device. After a reboot the firmware has reloaded an empty password, so `start()` finds it
+    /// un-paired and gives it the password `recover()` stored. If it hasn't rebooted, the recovery
+    /// runs again and asks for the reboot again.
     func reconnectAndFinish() async {
         if isDemo { await demoFinishRecovery(); return }
         close()
@@ -194,6 +278,7 @@ final class DeviceController: ObservableObject {
     }
 
     func close() {
+        linkGeneration &+= 1
         alarmSynced = false
         callAlertActive = false
         Task { await session?.close() }
@@ -222,7 +307,7 @@ final class DeviceController: ObservableObject {
     // (the session has a cipher after the handshake).
 
     func setLight(on: Bool) async {
-        guard let session else { return }
+        guard let session = readySession else { return }
         do {
             _ = try await session.transceive(Commands.frontLight(on: on))
             lightOn = on
@@ -230,7 +315,7 @@ final class DeviceController: ObservableObject {
     }
 
     func applyLightSettings() async {
-        guard let session else { return }
+        guard let session = readySession else { return }
         let mode: Commands.LightMode = blinking ? .blinking : .normal
         let level = UInt8(max(0, min(255, brightness.rounded())))
         do {
@@ -241,7 +326,7 @@ final class DeviceController: ObservableObject {
     // MARK: - Ring effects (animations) + device settings
 
     func showClockNow() async {
-        guard let session else { return }
+        guard let session = readySession else { return }
         let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let cmd = Commands.showClock(hour: UInt8(c.hour ?? 0), minute: UInt8(c.minute ?? 0))
         do { _ = try await session.transceive(cmd, label: "showClock") }
@@ -249,26 +334,26 @@ final class DeviceController: ObservableObject {
     }
 
     func showSpeedometerDemo() async {
-        guard let session else { return }
+        guard let session = readySession else { return }
         do { _ = try await session.transceive(Commands.showSpeedometer(percentage: 60, speed: 24), label: "speedometer") }
         catch { statusMessage = "speedometer failed: \(describe(error))" }
     }
 
     func showCharge() async {
-        guard let session else { return }
+        guard let session = readySession else { return }
         do { _ = try await session.transceive(Commands.showStateOfCharge(), label: "showCharge") }
         catch { statusMessage = "charge anim failed: \(describe(error))" }
     }
 
     func animationsOff() async {
-        guard let session else { return }
+        guard let session = readySession else { return }
         do { _ = try await session.transceive(Commands.animOff(), label: "animOff") }
         catch { statusMessage = "anim off failed: \(describe(error))" }
     }
 
     /// Fire a display/ring command (fire-and-forget; errors surface in statusMessage + the live log).
     func run(_ cmd: Data, _ label: String) async {
-        guard let session else { return }
+        guard let session = readySession else { return }
         do { _ = try await session.transceive(cmd, label: label) }
         catch { statusMessage = "\(label) failed: \(describe(error))" }
     }
@@ -292,7 +377,7 @@ final class DeviceController: ObservableObject {
 
     @discardableResult
     func renameDevice() async -> Bool {
-        guard let session, !deviceName.isEmpty else { return false }
+        guard let session = readySession, !deviceName.isEmpty else { return false }
         do {
             _ = try await session.transceive(Commands.setName(deviceName), label: "setName")
             statusMessage = "Renamed to “\(deviceName)”."
@@ -332,7 +417,7 @@ final class DeviceController: ObservableObject {
         let code = tapCode ?? settings.alarmTapCode
         let vigilant = vigilant ?? settings.alarmVigilant
         let armed = on && code != nil
-        guard session != nil, let seed = await alarmSeed() else {
+        guard readySession != nil, let seed = await alarmSeed() else {
             statusMessage = "alarm: couldn't get seed"
             if !isChange { alarmSynced = false }
             return false
@@ -383,7 +468,7 @@ final class DeviceController: ObservableObject {
     /// `transceive`, retrying briefly while another command is in flight. Nil on failure.
     private func transceiveRetrying(_ cmd: Data, _ label: String) async -> Data? {
         for attempt in 0..<6 {
-            guard let session else { return nil }
+            guard let session = readySession else { return nil }
             do {
                 return try await session.transceive(cmd, label: label)
             } catch Session.SessionError.transceiveInProgress {
@@ -681,7 +766,7 @@ final class DeviceController: ObservableObject {
     /// `run`, retrying briefly while another command is in flight (the session takes one at a time).
     private func transceiveWaiting(_ cmd: Data, _ label: String) async {
         for attempt in 0..<8 {
-            guard let session else { return }
+            guard let session = readySession else { return }
             do {
                 _ = try await session.transceive(cmd, label: label)
                 return
@@ -711,54 +796,23 @@ final class DeviceController: ObservableObject {
         await run(Commands.localization(unixSeconds: secs, language: lang), "localization")
     }
     func shutdownDevice() async { await run(Commands.shutdown(), "shutdown") }
-    /// No password under this iPhone's peripheral identifier: try passwords stored for other
-    /// identifiers (synced from another iPhone via iCloud Keychain). Peripheral IDs are per-iPhone,
-    /// so the same ring shows up under a new ID there. A winner is re-saved under this ID. Capped,
-    /// so a keychain full of stale entries doesn't hammer the ring with failed authentications.
-    private func adoptOtherPassword(session: Session) async -> Bool {
-        let candidates = KeychainStore.otherPasswords(excluding: deviceID).prefix(3)
-        for candidate in candidates {
-            phase = .authenticating
-            statusMessage = "Trying a password from iCloud Keychain…"
-            do {
-                try await session.handshake(password: candidate)
-                try? KeychainStore.save(password: candidate, deviceID: deviceID,
-                                        synchronizable: AppSettings.shared.syncPasswordsToICloud)
-                SH2Log.log("auth: adopted a stored password from another iPhone")
-                return true
-            } catch {
-                SH2Log.log("auth: stored password from another iPhone rejected")
-            }
-        }
-        return false
-    }
-
     /// The password this iPhone uses for the ring (for Settings › Advanced: show / copy).
     var savedPassword: String? { isDemo ? newlyGeneratedPassword : KeychainStore.load(deviceID: deviceID) }
 
-    /// Use a password the user saved elsewhere (e.g. their password manager). Stores it, reconnects
-    /// and authenticates; on rejection the previous stored password (if any) is put back.
+    /// Use a password the user saved elsewhere (e.g. their password manager). Reconnects and
+    /// authenticates with it alone; it's stored only if the ring accepts it. Otherwise reconnects
+    /// with the stored passwords, so a typo doesn't leave us locked out.
     @discardableResult
     func useSavedPassword(_ password: String) async -> Bool {
         let password = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !password.isEmpty, !isDemo else { return false }
-        let previous = KeychainStore.load(deviceID: deviceID)
-        let sync = AppSettings.shared.syncPasswordsToICloud
-        do { try KeychainStore.save(password: password, deviceID: deviceID, synchronizable: sync) }
-        catch { statusMessage = "Couldn't store the password: \(describe(error))"; return false }
         close()
         try? await Task.sleep(for: .seconds(1))   // let the disconnect settle before reconnecting
-        await start()
+        await start(only: password)
         if phase == .ready { return true }
-        if let previous {
-            // Put the old password back and reconnect with it, so a typo doesn't leave us locked out.
-            try? KeychainStore.save(password: previous, deviceID: deviceID, synchronizable: sync)
-            close()
-            try? await Task.sleep(for: .seconds(1))
-            await start()
-        } else {
-            KeychainStore.delete(deviceID: deviceID)
-        }
+        close()
+        try? await Task.sleep(for: .seconds(1))
+        await start()
         statusMessage = "That password was rejected by the ring."
         return false
     }
@@ -773,7 +827,7 @@ final class DeviceController: ObservableObject {
     }
 
     func refreshInfo() async {
-        guard let session else { return }
+        guard let session = readySession else { return }
         do {
             let r = [UInt8](try await session.transceive(Commands.getVersions()))
             if r.count >= 9, r[0] == ReturnCode.ok.rawValue {

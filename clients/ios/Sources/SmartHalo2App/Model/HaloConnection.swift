@@ -8,7 +8,7 @@ enum HaloConnectionState: Equatable {
     case connected       // session ready (handshake done)
     case connecting      // connecting / authenticating / reconnecting
     case disconnected    // no Halo, link down, Bluetooth off, or the ring is out of range
-    case needsRecovery   // the ring rejected our password (or never had one): re-pair needed
+    case needsRecovery   // the ring holds a password this iPhone doesn't have: re-pair needed
 }
 
 /// Owns "my Halo": the one `DeviceController` the whole app shares (Mapa, Halo tab, Settings…).
