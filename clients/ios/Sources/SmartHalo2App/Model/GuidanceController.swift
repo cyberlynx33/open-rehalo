@@ -185,6 +185,13 @@ final class GuidanceController: ObservableObject {
     /// Ask for location permission (Map tab recenter / first use).
     func requestLocationPermission() { tracker.requestAuthorization() }
 
+    /// One fix while not navigating, so `lastLocation` is fresh for the Map tab's checks (how far
+    /// the rider is from a route's start). The tracker stops again as soon as it arrives (`handle`).
+    func primeLocation() {
+        guard !following, locationAuthorized else { return }
+        tracker.start()
+    }
+
     /// Start guiding along `route`. Uses the simulated rider when the demo Halo is active.
     /// - `instructions`: a routed destination's instructions (street names on the ring).
     /// - `routedSteps`: a routed destination's own steps, for its turns.
@@ -383,7 +390,10 @@ final class GuidanceController: ObservableObject {
     private func handle(_ loc: CLLocation) {
         userCoord = loc.coordinate
         lastLocation = loc
-        guard following, var ride = engine else { return }
+        guard following, var ride = engine else {
+            tracker.stop()          // a primed fix (`primeLocation`): one is enough
+            return
+        }
         let compass = headingTracker?.isReliable == true ? headingTracker?.heading : nil
         let fix = RideFix(loc)
         let result = ride.update(fix, compassHeading: compass)

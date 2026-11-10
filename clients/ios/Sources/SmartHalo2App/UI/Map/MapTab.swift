@@ -169,6 +169,8 @@ struct MapTab: View {
         .onAppear {
             // The map opens on the rider: ask if Onboarding didn't get an answer.
             if !guidance.locationAuthorized && !guidance.locationDenied { guidance.requestLocationPermission() }
+            // A fresh fix for `currentCoordinate` (the "far from the start" question).
+            guidance.primeLocation()
             if !appeared {
                 // Only once: `onAppear` also fires on every return from another tab, and reframing
                 // then would throw away wherever the rider had put the map.
@@ -554,9 +556,12 @@ struct MapTab: View {
         }
     }
 
-    /// Where the rider is now (the last known fix), if Location is on.
+    /// Where the rider is now, if Location is on: the guidance's fix when it is recent (it is primed
+    /// on appear), else what CoreLocation last cached. Before the first fix of a launch the cache
+    /// can be empty, which is why the fix is primed.
     private var currentCoordinate: CLLocationCoordinate2D? {
         guard guidance.locationAuthorized else { return nil }
+        if let loc = guidance.lastLocation, Date().timeIntervalSince(loc.timestamp) < 300 { return loc.coordinate }
         return CLLocationManager().location?.coordinate ?? guidance.userCoord
     }
 
