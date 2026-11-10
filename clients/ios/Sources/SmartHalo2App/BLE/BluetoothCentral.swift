@@ -141,6 +141,12 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
                     self.connectContinuation = nil
                     old.resume(throwing: CentralError.superseded)
                 }
+                // A pending connect to another ring would otherwise stay armed in CoreBluetooth and
+                // complete, into nobody's hands, whenever that ring came into range.
+                if let old = self.connectingPeripheral, old.identifier != peripheral.identifier {
+                    self.intentionalDisconnects.insert(old.identifier)
+                    self.manager.cancelPeripheralConnection(old)
+                }
                 self.intentionalDisconnects.remove(peripheral.identifier)
                 self.connectContinuation = cont
                 self.connectingPeripheral = peripheral
@@ -234,7 +240,14 @@ extension BluetoothCentral: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        guard let cont = connectContinuation else { return }
+        guard peripheral.identifier == connectingPeripheral?.identifier, let cont = connectContinuation else {
+            // A connect nobody is waiting for any more (an older pending one, to another ring):
+            // release the ring instead of holding an unauthenticated link until its 60 s kick-out.
+            SH2Log.log("central: a ring no longer wanted connected [\(peripheral.identifier.uuidString.prefix(8))] — releasing it")
+            intentionalDisconnects.insert(peripheral.identifier)
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
         connectContinuation = nil
         let transport = BluetoothTransport(peripheral: peripheral, queue: bleQueue)
         activeTransport = transport
@@ -244,7 +257,7 @@ extension BluetoothCentral: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager,
                          didFailToConnect peripheral: CBPeripheral,
                          error: Error?) {
-        guard let cont = connectContinuation else { return }
+        guard peripheral.identifier == connectingPeripheral?.identifier, let cont = connectContinuation else { return }
         connectContinuation = nil
         SH2Log.log("central: ✗ failed to connect — \(error?.localizedDescription ?? "unknown")")
         cont.resume(throwing: CentralError.connectFailed(error?.localizedDescription ?? "unknown"))
@@ -253,19 +266,22 @@ extension BluetoothCentral: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager,
                          didDisconnectPeripheral peripheral: CBPeripheral,
                          error: Error?) {
-        SH2Log.log("central: ⚡️ disconnected — \(error?.localizedDescription ?? "clean")")
+        SH2Log.log("central: ⚡️ disconnected [\(peripheral.identifier.uuidString.prefix(8))] — \(error?.localizedDescription ?? "clean")")
         // Tear down the transport's notification stream so the Session's in-flight wait fails fast
         // instead of hanging (this is the key fix for the reset-challenge freeze: the ring drops
-        // the link right after resetPassword un-pairs it).
-        activeTransport?.handleDisconnect()
-        // If we were still waiting on a connect, surface it as a failure.
-        if let cont = connectContinuation {
-            connectContinuation = nil
-            cont.resume(throwing: CentralError.disconnected(error?.localizedDescription ?? "disconnected"))
+        // the link right after resetPassword un-pairs it). Only this ring's transport: with two
+        // rings, the old link's late disconnect must not kill the new one.
+        if let transport = activeTransport, transport.peripheralID == peripheral.identifier {
+            transport.handleDisconnect()
+            activeTransport = nil
         }
         if peripheral.identifier == connectingPeripheral?.identifier {
+            // If we were still waiting on a connect, surface it as a failure.
+            if let cont = connectContinuation {
+                connectContinuation = nil
+                cont.resume(throwing: CentralError.disconnected(error?.localizedDescription ?? "disconnected"))
+            }
             connectingPeripheral = nil
-            activeTransport = nil
         }
         let unexpected = intentionalDisconnects.remove(peripheral.identifier) == nil
         let event = DisconnectEvent(id: peripheral.identifier, unexpected: unexpected)
