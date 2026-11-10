@@ -1905,23 +1905,6 @@
         }
       }
     },
-    "Compass calibration: after tapping, turn the Halo slowly in a figure of eight." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compass calibration: after tapping, turn the Halo slowly in a figure of eight."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Calibrar la brújula: tras tocar, gira el Halo despacio dibujando un ocho."
-          }
-        }
-      }
-    },
     "Connect server" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7770,57 +7753,6 @@
         }
       }
     },
-    "Speedometer off" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speedometer off"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apagar el velocímetro"
-          }
-        }
-      }
-    },
-    "Heartbeat" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Heartbeat"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Latido"
-          }
-        }
-      }
-    },
-    "Heartbeat off" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Heartbeat off"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apagar el latido"
-          }
-        }
-      }
-    },
     "Logo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7851,57 +7783,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aviso de batería baja"
-          }
-        }
-      }
-    },
-    "Heading: %lld°" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Heading: %lld°"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rumbo: %lld°"
-          }
-        }
-      }
-    },
-    "Point to heading" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Point to heading"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apuntar al rumbo"
-          }
-        }
-      }
-    },
-    "Compass off" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compass off"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apagar la brújula"
           }
         }
       }
@@ -8990,6 +8871,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "getSerial ha fallado: %@"
+          }
+        }
+      }
+    },
+    "Alarm demo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alarm demo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo de la alarma"
+          }
+        }
+      }
+    },
+    "This server uses plain HTTP: your password and session travel unencrypted. Use it only on your own network." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server uses plain HTTP: your password and session travel unencrypted. Use it only on your own network."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este servidor usa HTTP sin cifrar: tu contraseña y tu sesión viajan en claro. Úsalo solo en tu propia red."
           }
         }
       }
