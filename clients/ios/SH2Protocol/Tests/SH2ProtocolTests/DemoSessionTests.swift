@@ -58,6 +58,21 @@ final class DemoSessionTests: XCTestCase {
         XCTAssertEqual([UInt8](light).first, ReturnCode.ok.rawValue)
     }
 
+    /// Requests made while another is in flight wait their turn instead of failing: the light
+    /// toggle, the guidance and the carousel's answer all get through, in order.
+    func testConcurrentRequestsTakeTurns() async throws {
+        let session = Session(transport: TinyMock())
+        try await session.open()
+        await session.authenticateForDemo()
+        async let a = session.transceive(Commands.getVersions(), crypted: false)
+        async let b = session.transceive(Commands.frontLight(on: true), crypted: false)
+        async let c = session.transceive(Commands.getVersions(), crypted: false)
+        let (ra, rb, rc) = try await (a, b, c)
+        XCTAssertEqual([UInt8](ra), [0, 1, 2, 3, 4, 5, 6, 7, 8])
+        XCTAssertEqual([UInt8](rb), [ReturnCode.ok.rawValue])
+        XCTAssertEqual([UInt8](rc), [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    }
+
     /// The firmware reads the command byte even when it isn't there: `[4]` would run `{4,0}`
     /// (enter bootloader). Such a request never leaves the phone.
     func testARequestShorterThanTwoBytesIsRefused() async throws {

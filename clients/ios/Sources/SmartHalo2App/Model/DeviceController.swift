@@ -314,7 +314,8 @@ final class DeviceController: ObservableObject {
     // All control methods are @MainActor (the whole class is). `session.transceive(...)` hops onto
     // the Session actor to do the BLE round-trip and hops back here on return, so `@Published`
     // state is always assigned on the main actor. Command payloads are sent encrypted by default
-    // (the session has a cipher after the handshake).
+    // (the session has a cipher after the handshake). The session queues requests: a tap on the
+    // light while the guidance or the carousel's answer is in flight waits its turn, it isn't lost.
 
     func setLight(on: Bool) async {
         guard let session = readySession else { return }
@@ -475,20 +476,16 @@ final class DeviceController: ObservableObject {
         return report
     }
 
-    /// `transceive`, retrying briefly while another command is in flight. Nil on failure.
+    /// `transceive` on the ready session (requests queue up inside it). Nil on failure, with the
+    /// error in `statusMessage`.
     private func transceiveRetrying(_ cmd: Data, _ label: String) async -> Data? {
-        for attempt in 0..<6 {
-            guard let session = readySession else { return nil }
-            do {
-                return try await session.transceive(cmd, label: label)
-            } catch Session.SessionError.transceiveInProgress {
-                try? await Task.sleep(for: .milliseconds(150 * (attempt + 1)))
-            } catch {
-                statusMessage = "\(label) failed: \(describe(error))"
-                return nil
-            }
+        guard let session = readySession else { return nil }
+        do {
+            return try await session.transceive(cmd, label: label)
+        } catch {
+            statusMessage = "\(label) failed: \(describe(error))"
+            return nil
         }
-        return nil
     }
 
     // MARK: - UP channel
@@ -658,8 +655,8 @@ final class DeviceController: ObservableObject {
 
     // MARK: - Call alerts
     //
-    // `CallAlertController` decides; this talks to the ring. Through the `sendNav` queue: `run` drops
-    // a command while another is in flight, and the guidance sends one every few seconds.
+    // `CallAlertController` decides; this talks to the ring. Through the `sendNav` queue, so the
+    // alert and its sound go out in order with the guidance's commands.
 
     /// The ring has been told about an incoming call and not yet told it's over.
     private(set) var callAlertActive = false
@@ -773,20 +770,10 @@ final class DeviceController: ObservableObject {
         }
     }
 
-    /// `run`, retrying briefly while another command is in flight (the session takes one at a time).
+    /// `run` for the navigation queue: the session takes requests in order, so this only waits for
+    /// its turn and the reply.
     private func transceiveWaiting(_ cmd: Data, _ label: String) async {
-        for attempt in 0..<8 {
-            guard let session = readySession else { return }
-            do {
-                _ = try await session.transceive(cmd, label: label)
-                return
-            } catch Session.SessionError.transceiveInProgress {
-                try? await Task.sleep(for: .milliseconds(100 * (attempt + 1)))
-            } catch {
-                statusMessage = "\(label) failed: \(describe(error))"
-                return
-            }
-        }
+        await run(cmd, label)
     }
 
     // Device settings (M4)
