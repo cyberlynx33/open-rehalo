@@ -371,7 +371,15 @@ final class DeviceController: ObservableObject {
 
     // M1 — display widgets / assistant
     func showLogo() async            { await run(Commands.logo(), "logo") }
-    func showDemo() async            { await run(Commands.demo(), "demo") }
+    /// The ring's own demo of its alarm (`{1,25}`): armed, then the warning growl, then off. Never
+    /// the siren state: the ring counts it as a real trigger.
+    func showDemo() async {
+        await run(Commands.alarmDemo(.armed), "alarmDemo")
+        try? await Task.sleep(for: .seconds(2))
+        await run(Commands.alarmDemo(.warning, progress: 60), "alarmDemo")
+        try? await Task.sleep(for: .seconds(2))
+        await run(Commands.alarmDemo(.off), "alarmDemo")
+    }
     func showCompass(heading: UInt16) async { await run(Commands.compass(heading: heading), "compass") }
     func compassOff() async          { await run(Commands.compassOff(), "compassOff") }
     func showProgress(_ pct: UInt8) async   { await run(Commands.progress(percentage: pct), "progress") }

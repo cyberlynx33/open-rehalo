@@ -41,26 +41,41 @@ public enum Commands {
         case blinking = 1
     }
 
-    /// `{1,4}` front light (ring): `[1,4, on?1:0, external?1:0]`
-    public static func frontLight(on: Bool, external: Bool = false) -> Data {
-        Data([1, 4, on ? 1 : 0, external ? 1 : 0])
+    /// `{1,4}` front light: `[1,4, on, movementRequired]` (`NightLightStatePayload`, NightLightTask.c).
+    /// With `movementRequired` the light waits for the bike to move, goes off about 24 s after it
+    /// stops and comes back with the next movement: the firmware's automatic mode. (The second byte
+    /// was long mislabelled "external"; "external" is `{1,30}`.)
+    public static func frontLight(on: Bool, movementRequired: Bool = false) -> Data {
+        Data([1, 4, on ? 1 : 0, movementRequired ? 1 : 0])
     }
 
-    /// `{1,16}` front light settings:
-    /// `[1,16, mode, brightness, blinkingLocked?1:0, silenceRocker?1:0]`
-    public static func frontLightSettings(
-        mode: LightMode,
-        brightness: UInt8,
-        blinkingLocked: Bool = false,
-        silenceRocker: Bool = false
-    ) -> Data {
-        Data([1, 16, mode.rawValue, brightness, blinkingLocked ? 1 : 0, silenceRocker ? 1 : 0])
+    /// `{1,4}` in its automatic mode: on while riding, off when parked.
+    public static func frontLightAutomatic() -> Data { frontLight(on: true, movementRequired: true) }
+
+    /// `{1,16}` front light settings: `[1,16, mode, brightness %, blinkingLocked, silenceRocker]`.
+    /// `brightness` is a percentage: the firmware floors it at 10 and caps it at 100
+    /// (`NightLightTask.c:200`, `FrontLEDDriver.c:39-41`). The firmware only stores the blink lock
+    /// when the payload is exactly 3 bytes (`NightLightTask.c:191-194`); this 4-byte form keeps the
+    /// stored lock, which starts out **locked** (`BlinkPermission`) and turns `.blinking` into steady
+    /// light until `frontLightUnlockBlinking` has been sent once.
+    public static func frontLightSettings(mode: LightMode, brightness: UInt8, silenceRocker: Bool = false) -> Data {
+        Data([1, 16, mode.rawValue, lightPercent(brightness), 0, silenceRocker ? 1 : 0])
     }
+
+    /// `{1,16}` in its 3-byte form, the only one that writes the blink lock: clears it (the ring
+    /// ships locked) and applies `mode` and `brightness` like `frontLightSettings`. The firmware
+    /// shows its mode rocker on the OLED for this one (no `silenceRocker` byte).
+    public static func frontLightUnlockBlinking(mode: LightMode, brightness: UInt8) -> Data {
+        Data([1, 16, mode.rawValue, lightPercent(brightness), 0])
+    }
+
+    static func lightPercent(_ v: UInt8) -> UInt8 { min(100, max(10, v)) }
 
     /// `{1,14}` animOff — turn off the current animation
     public static func animOff() -> Data { Data([1, 14]) }
 
-    /// `{1,15}` setBrightness — global brightness
+    /// `{1,15}` setBrightness. **Not handled by the SmartHalo 2's STM32 firmware** (no handler is
+    /// registered: it answers `RET_UNIMPLEMENTED`); the ring's brightness follows its light sensor.
     public static func setBrightness(_ v: UInt8) -> Data { Data([1, 15, v]) }
 
     /// A ring colour in the firmware's HSL byte form (each 0…255). Port of `SHColour`.
@@ -106,16 +121,30 @@ public enum Commands {
     /// `{1,0}` logo — show the SmartHalo logo animation.
     public static func logo() -> Data { Data([1, 0]) }
 
-    /// `{1,25}` demo — run the built-in demo animation. // TODO: the app appends extra bytes.
-    public static func demo() -> Data { Data([1, 25]) }
+    /// The states of the firmware's alarm demo (`alarmDemo`, AlarmTask.c): `{1,25}` is that demo,
+    /// not a generic one.
+    public enum AlarmDemoState: UInt8, Sendable {
+        case off = 0, armed, disarmed
+        /// The "eyes" and, with `progress` > 25, the growl.
+        case warning
+        /// The ≈15 s siren at full volume. **Counts as a real trigger** in the ring's alarm report.
+        case siren
+    }
+
+    /// `{1,25}` alarm demo: `[1,25, state, progress]`. Without the state byte the firmware answers
+    /// `RET_FAIL`.
+    public static func alarmDemo(_ state: AlarmDemoState, progress: UInt8 = 0) -> Data {
+        Data([1, 25, state.rawValue, progress])
+    }
 
     /// `{1,11}` compass — point the ring to a heading (0…359°) in a colour.
     /// `ui_compass`: `[1,11, hue, sat, light, heading>>8, heading]`.
+    /// **Not handled by the SmartHalo 2's STM32 firmware** (`RET_UNIMPLEMENTED`), nor `{1,12}`.
     public static func compass(heading: UInt16, colour: Colour = .teal) -> Data {
         Data([1, 11, colour.hue, colour.saturation, colour.lightness,
               UInt8((heading >> 8) & 0xff), UInt8(heading & 0xff)])
     }
-    /// `{1,12}` compass off.
+    /// `{1,12}` compass off. Not handled by the SmartHalo 2's firmware.
     public static func compassOff() -> Data { Data([1, 12]) }
 
     /// `{1,5}` progress — goal progress ring. Port of `ProgressCommandPayload.getBytes()` WITHOUT the
@@ -135,6 +164,7 @@ public enum Commands {
 
     /// `{1,9}` heartbeat — pulsing ring. Port of `ui_hb`:
     /// `[c1(3), c2(3), a>>8,a, b>>8,b, c>>8,c, d>>8,d]` (four 16-bit timing params).
+    /// **Not handled by the SmartHalo 2's STM32 firmware** (`RET_UNIMPLEMENTED`), nor `{1,10}`.
     public static func heartbeat(firstColour: Colour = .teal, secondColour: Colour = .white,
                                  a: UInt16 = 1000, b: UInt16 = 1000, c: UInt16 = 60, d: UInt16 = 0) -> Data {
         func hl(_ v: UInt16) -> [UInt8] { [UInt8((v >> 8) & 0xff), UInt8(v & 0xff)] }
@@ -162,7 +192,8 @@ public enum Commands {
     public static func speedometerIntro() -> Data { Data([1, 26]) }
 
     /// `{1,27}` fitness intro. Port of `experimental_fitness_intro`:
-    /// `[1,27, c1(3), c2(3), value>>8, value]`.
+    /// `[1,27, c1(3), c2(3), value>>8, value]`. The SH2 firmware accepts it but draws it from a
+    /// NULL payload (`RideTask.c:798-805` → `GraphicsTask.c:1078-1088`): practically invisible.
     public static func fitnessIntro(colour: Colour = .teal, secondColour: Colour = .white,
                                     value: UInt16 = 0) -> Data {
         Data([1, 27, colour.hue, colour.saturation, colour.lightness,
@@ -178,15 +209,34 @@ public enum Commands {
 
     /// `{1,33}` navigation pointer with intro. Port of `ui_pointer_intro`:
     /// `[1,33, c(3), heading>>8, heading, exit]`.
+    /// **Not handled by the SmartHalo 2's STM32 firmware** (`RET_UNIMPLEMENTED`).
     public static func pointerWithIntro(heading: UInt16, exit: UInt8 = 0, colour: Colour = .teal) -> Data {
         Data([1, 33, colour.hue, colour.saturation, colour.lightness,
               UInt8((heading >> 8) & 0xff), UInt8(heading & 0xff), exit])
     }
 
-    /// `{1,20}` roundabout. // TODO: full payload (exit + colours + text); minimal trigger here.
-    public static func roundabout(exit: UInt8 = 0) -> Data { Data([1, 20, exit]) }
-    /// `{1,34}` roundabout (OLED). // TODO: params.
-    public static func roundaboutOled(exit: UInt8 = 0) -> Data { Data([1, 34, exit]) }
+    /// How the ring sweeps into a roundabout (`RoundaboutPayload.style`, RideTask.c).
+    public enum RoundaboutStyle: UInt8, Sendable { case clockwise = 0, counterClockwise = 1, none = 2 }
+
+    /// `{1,20}` roundabout on the ring (`RideTask.c:830-854`):
+    /// `[1,20, exitNow, style, exitColour(3), wrongColour(3), exits(int16 BE)…]`. `exits` are the
+    /// angles of every exit from the entry, the one to take **first**, drawn in `exitColour`; the
+    /// others in `wrongColour`; `exitNow` makes the exit blink. The firmware needs at least one exit
+    /// (10 bytes of payload) and has room for 10: more overflow its buffer, so they are cut.
+    public static func roundabout(exits: [Int], exitNow: Bool = false, style: RoundaboutStyle = .clockwise,
+                                  exitColour: Colour = NavColour.turn, wrongColour: Colour = NavColour.warning) -> Data {
+        var bytes: [UInt8] = [1, 20, exitNow ? 1 : 0, style.rawValue,
+                              exitColour.hue, exitColour.saturation, exitColour.lightness,
+                              wrongColour.hue, wrongColour.saturation, wrongColour.lightness]
+        for exit in exits.prefix(10) { bytes += angle16(exit) }
+        return Data(bytes)
+    }
+
+    /// `{1,34}` roundabout on the OLED (`RideTask.c:856-866`): `[1,34] + D(4) + text`, the distance
+    /// and the instruction only; the ring's drawing is `roundabout(exits:)`.
+    public static func roundaboutOled(distance: Int, text: String, metric: Bool = true) -> Data {
+        Data([1, 34] + metric4(distance, metric: metric) + navText(text, header: 6))
+    }
 
     /// The ring's carousel cards (bit `rawValue` of the carousel mask; `RideTask.h` order).
     public enum CarouselCard: UInt8, CaseIterable, Sendable {
@@ -238,12 +288,15 @@ public enum Commands {
     }
 
     /// Average-speed card: average and current speed in metres (or feet) per hour, then the gauge
-    /// colours for slower / average / faster than the average.
+    /// colours for slower / average / faster than the average. The average is never 0: the ring
+    /// divides by it (`AnimationsLibrary.c:439-444`). With imperial units the ring's marker sticks
+    /// at "average" (it compares the two values with the unit bit set, `RideTask.c:1037-1038`);
+    /// the OLED's number and unit are right, and that is what the card is for.
     public static func carouselAvgSpeed(mask: UInt16, averageKmh: Double, currentKmh: Double,
                                         metric: Bool = true) -> Data {
         let lower = NavColour.caution, average = Colour.white, higher = NavColour.turn
         return Data(carouselHeader(.avgSpeed, mask: mask)
-                    + metric4(NavMath.trunc((averageKmh * 1000).rounded()), metric: metric)
+                    + metric4(max(1, NavMath.trunc((averageKmh * 1000).rounded())), metric: metric)
                     + metric4(NavMath.trunc((currentKmh * 1000).rounded()), metric: metric)
                     + [lower.hue, lower.saturation, lower.lightness,
                        average.hue, average.saturation, average.lightness,
@@ -436,8 +489,11 @@ public enum Commands {
 
     // MARK: - Service 2 — Sound (STM32 piezo)
 
-    public static func soundPlay() -> Data { Data([2, 0]) }
-    /// `{2,0}` play a track: `[2,0, volume ≤ 100, repeat, (freq(2) ms(2))…]` (plays repeat + 1 times).
+    /// A short chime to hear the ring (the official "info" sound at half volume). `[2,0]` alone
+    /// plays nothing: the firmware reads a volume and notes that aren't there.
+    public static func soundPlay() -> Data { soundPlay(volume: 50, track: NavSound.info) }
+    /// `{2,0}` play a track: `[2,0, volume ≤ 100, repeat, (freq(2) ms(2))…]` (plays repeat + 1 times,
+    /// up to 16 notes). The firmware ignores the whole command when `volume` is over 100, hence the cap.
     public static func soundPlay(volume: UInt8, repeat: UInt8 = 0, track: [UInt8]) -> Data {
         Data([2, 0, min(100, volume), `repeat`] + track)
     }
@@ -500,7 +556,8 @@ public enum Commands {
     public static func setName(_ name: String) -> Data { Data([4, 2]) + Data(name.utf8) }
     public static func shutdown() -> Data { Data([4, 4]) }
 
-    /// `{4,3}` compass calibrate.
+    /// `{4,3}` compass calibrate. **Not handled by the SmartHalo 2's STM32 firmware** (no handler
+    /// is registered: `RET_UNIMPLEMENTED`); nothing reads the magnetometer over BLE.
     public static func compassCalibrate() -> Data { Data([4, 3]) }
 
     /// `{4,6}` localization — set the device clock + language. Port of `updateDeviceTime`:

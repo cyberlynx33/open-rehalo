@@ -9,7 +9,28 @@ final class CommandsTests: XCTestCase {
         XCTAssertEqual([UInt8](Commands.getVersions()), [0, 0])
         XCTAssertEqual([UInt8](Commands.getSeed()), [0, 6])
         XCTAssertEqual([UInt8](Commands.frontLight(on: true)), [1, 4, 1, 0])
+        XCTAssertEqual([UInt8](Commands.frontLightAutomatic()), [1, 4, 1, 1])
         XCTAssertEqual([UInt8](Commands.setName("AB")), [4, 2, 0x41, 0x42])
+    }
+
+    /// `{1,16}`: brightness is a percentage the firmware keeps within 10…100; the 4-byte form never
+    /// touches the blink lock, the 3-byte form clears it.
+    func testFrontLightSettingsLayouts() {
+        XCTAssertEqual([UInt8](Commands.frontLightSettings(mode: .blinking, brightness: 80)), [1, 16, 1, 80, 0, 0])
+        XCTAssertEqual([UInt8](Commands.frontLightSettings(mode: .normal, brightness: 3)), [1, 16, 0, 10, 0, 0])
+        XCTAssertEqual([UInt8](Commands.frontLightSettings(mode: .normal, brightness: 200, silenceRocker: true)),
+                       [1, 16, 0, 100, 0, 1])
+        XCTAssertEqual([UInt8](Commands.frontLightUnlockBlinking(mode: .blinking, brightness: 50)), [1, 16, 1, 50, 0])
+    }
+
+    /// `{1,20}` needs the exits' angles (the first is the one to take); `{1,34}` is distance + text.
+    func testRoundaboutLayouts() {
+        XCTAssertEqual([UInt8](Commands.roundabout(exits: [90, -120], exitNow: true)),
+                       [1, 20, 1, 0, 67, 255, 255, 253, 237, 255, 0x00, 0x5a, 0xff, 0x88])
+        XCTAssertEqual([UInt8](Commands.roundabout(exits: Array(repeating: 30, count: 12), style: .none)).count,
+                       10 + 2 * 10)
+        XCTAssertEqual([UInt8](Commands.roundaboutOled(distance: 120, text: "Go")),
+                       [1, 34, 0, 0, 0, 120, 0x47, 0x6f, 0])
     }
 
     func testShowClockLayout() {
@@ -32,7 +53,9 @@ final class CommandsTests: XCTestCase {
     func testDisplayWidgetLayouts() {
         let teal = Commands.Colour.teal, white = Commands.Colour.white
         XCTAssertEqual([UInt8](Commands.logo()), [1, 0])
-        XCTAssertEqual([UInt8](Commands.demo()), [1, 25])
+        // {1,25} is the firmware's alarm demo: [state, progress].
+        XCTAssertEqual([UInt8](Commands.alarmDemo(.armed)), [1, 25, 1, 0])
+        XCTAssertEqual([UInt8](Commands.alarmDemo(.warning, progress: 60)), [1, 25, 3, 60])
         XCTAssertEqual([UInt8](Commands.compassOff()), [1, 12])
         XCTAssertEqual([UInt8](Commands.progressOff()), [1, 6])
         XCTAssertEqual([UInt8](Commands.heartbeatOff()), [1, 10])
@@ -95,8 +118,10 @@ final class CommandsTests: XCTestCase {
         let mask: UInt16 = 0x02dc
         XCTAssertEqual([UInt8](Commands.carouselSpeed(mask: mask, kmh: .nan)).suffix(3), [0, 0, 0])
         XCTAssertEqual([UInt8](Commands.carouselSpeed(mask: mask, kmh: 1e30)).suffix(3), [100, 255, 0])
+        // The average is never 0: the ring divides by it.
         let avg = [UInt8](Commands.carouselAvgSpeed(mask: mask, averageKmh: .nan, currentKmh: .infinity))
-        XCTAssertEqual(Array(avg[7..<15]), [0, 0, 0, 0, 0x7f, 0xff, 0xff, 0xff])
+        XCTAssertEqual(Array(avg[7..<15]), [0, 0, 0, 1, 0x7f, 0xff, 0xff, 0xff])
+        XCTAssertEqual(Array([UInt8](Commands.carouselAvgSpeed(mask: mask, averageKmh: 0, currentKmh: 0))[7..<11]), [0, 0, 0, 1])
     }
 
     func testAlarmSoundTouchLayouts() {
@@ -108,7 +133,8 @@ final class CommandsTests: XCTestCase {
         XCTAssertEqual([UInt8](Commands.alarmConfigure(seed: seed, tapCode: 0b110, tapLength: 3, armed: false, vigilant: true)),
                        [3, 3, 0xAA, 0xBB, 0xCC, 0xDD, 6, 3, 0, 1])
         // sound + touch
-        XCTAssertEqual([UInt8](Commands.soundPlay()), [2, 0])
+        // The bare "play" is a chime: [2,0] alone plays nothing on the ring.
+        XCTAssertEqual([UInt8](Commands.soundPlay()), [2, 0, 50, 0] + Commands.NavSound.info)
         XCTAssertEqual([UInt8](Commands.soundStop()), [2, 1])
         XCTAssertEqual([UInt8](Commands.soundTouch(on: true)), [2, 2, 40, 1])
         XCTAssertEqual([UInt8](Commands.soundTouch(on: false, volume: 120)), [2, 2, 100, 0])
