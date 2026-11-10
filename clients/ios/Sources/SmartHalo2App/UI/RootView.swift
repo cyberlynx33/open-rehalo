@@ -49,12 +49,14 @@ struct RootView: View {
 
     private func openURL(_ url: URL) {
         guard url.isFileURL else { return }
-        do {
-            let saved = try library.importGPX(from: url, defaultSource: .shared)
-            router.tab = .routes
-            library.pendingDetail = saved.id
-        } catch {
-            openError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+        router.tab = .routes            // the Routes tab shows the import's progress
+        Task {
+            do {
+                let saved = try await library.importGPX(from: url, defaultSource: .shared)
+                library.pendingDetail = saved.id
+            } catch {
+                openError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+            }
         }
     }
 }

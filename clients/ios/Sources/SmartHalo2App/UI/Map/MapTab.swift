@@ -425,6 +425,7 @@ struct MapTab: View {
     /// One message at a time, most urgent first.
     private var notice: MapNotice.Kind? {
         if leadingIn { return .leadingIn }
+        if library.isImporting { return .importing }
         if let importError { return .error(importError) }
         if guidance.locationDenied && !connection.isDemo { return .locationOff }
         if showNoHalo { return .noHalo }
@@ -519,8 +520,10 @@ struct MapTab: View {
     /// The bundled demo route goes through the library (saved + marked used); the built-in loop is
     /// only a fallback in demo mode if the bundle has no `DemoRoute.gpx`.
     private func useDemoRoute(_ fallback: GPXRoute) {
-        if let saved = library.addDemoRoute(), library.select(saved) { return }
-        selection.select(fallback, subtitle: demoSubtitle)
+        Task {
+            if let saved = await library.addDemoRoute(), library.select(saved) { return }
+            selection.select(fallback, subtitle: demoSubtitle)
+        }
     }
 
     /// NAVEGAR on the selected route; far from its start, ask first (lead me there / nearest point /
@@ -701,12 +704,14 @@ struct MapTab: View {
 
     private func saveDestination() {
         guard let d = destination, let r = routed else { return }
-        do {
-            try library.importGPX(data: GPXWriter.data(name: d.name, points: r.route.points),
-                                  fallbackName: d.name, source: .appleMaps)
-            destinationSaved = true
-        } catch {
-            routeError = String(localized: "Couldn't save the route: \(error.localizedDescription)")
+        Task {
+            do {
+                try await library.importGPX(data: GPXWriter.data(name: d.name, points: r.route.points),
+                                            fallbackName: d.name, source: .appleMaps)
+                if destination?.id == d.id { destinationSaved = true }
+            } catch {
+                routeError = String(localized: "Couldn't save the route: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -823,13 +828,22 @@ struct MapTab: View {
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
+        let url: URL
         do {
-            guard let url = try result.get().first else { return }
-            // Saved to the library (Routes tab) and selected here.
-            let saved = try library.importGPX(from: url, defaultSource: .files)
-            importError = library.select(saved) ? nil : String(localized: "Couldn't read this route's GPX file.")
+            guard let first = try result.get().first else { return }
+            url = first
         } catch {
             importError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+            return
+        }
+        Task {
+            do {
+                // Saved to the library (Routes tab) and selected here.
+                let saved = try await library.importGPX(from: url, defaultSource: .files)
+                importError = library.select(saved) ? nil : String(localized: "Couldn't read this route's GPX file.")
+            } catch {
+                importError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+            }
         }
     }
 }

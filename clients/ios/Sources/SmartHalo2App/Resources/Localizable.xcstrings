@@ -8891,6 +8891,23 @@
           }
         }
       }
+    },
+    "Importing the route…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing the route…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importando la ruta…"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
