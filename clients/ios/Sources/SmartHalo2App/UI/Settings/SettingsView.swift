@@ -377,6 +377,8 @@ struct RenameHaloView: View {
         busy = true
         failed = false
         Task {
+            // `renameDevice()` sends `deviceName`; if the ring refuses, the app shows the old name again.
+            let previous = controller.deviceName
             controller.deviceName = trimmed
             let ok = await controller.renameDevice()
             busy = false
@@ -384,6 +386,7 @@ struct RenameHaloView: View {
                 if !controller.isDemo { settings.myHaloName = trimmed }
                 dismiss()
             } else {
+                controller.deviceName = previous
                 failed = true
             }
         }
