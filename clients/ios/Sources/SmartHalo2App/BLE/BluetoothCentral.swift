@@ -173,6 +173,10 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
                 self.connectContinuation = nil
                 cont.resume(throwing: CentralError.cancelled)
             }
+            // Tear the transport down now: `didDisconnectPeripheral` arrives after this method has
+            // let go of it, so it would never be told, and a `discover()`/`enableNotifications()`
+            // still waiting on it would hang.
+            self.activeTransport?.handleDisconnect()
             self.connectingPeripheral = nil
             self.activeTransport = nil
         }
