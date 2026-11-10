@@ -92,7 +92,7 @@ final class DeviceController: ObservableObject {
         let generation = linkGeneration
         do {
             phase = .connecting
-            statusMessage = "Connecting…"
+            statusMessage = String(localized: "Connecting…")
 
             // Demo mode: a fake device over a MockTransport — skip Bluetooth, auth and recovery.
             if let demoTransport {
@@ -124,7 +124,7 @@ final class DeviceController: ObservableObject {
             try await session.open()
 
             phase = .authenticating
-            statusMessage = "Authenticating…"
+            statusMessage = String(localized: "Authenticating…")
             let accepted = try await authenticate(session, only: typed)
             // A close() or a newer start() took over meanwhile: the phase is theirs.
             guard generation == linkGeneration else { return }
@@ -132,8 +132,8 @@ final class DeviceController: ObservableObject {
                 await finishReady()
             } else {
                 statusMessage = KeychainStore.load(deviceID: deviceID) == nil
-                    ? "No saved password for this device. Recovery required."
-                    : "Saved password rejected. Recovery required."
+                    ? String(localized: "No saved password for this device. Recovery required.")
+                    : String(localized: "Saved password rejected. Recovery required.")
                 phase = .needsRecovery
             }
         } catch {
@@ -181,7 +181,7 @@ final class DeviceController: ObservableObject {
         // Capped: each try is one round trip, and a keychain full of stale entries shouldn't stall
         // the connection.
         for candidate in KeychainStore.fallbackPasswords(deviceID: deviceID).prefix(5) {
-            statusMessage = "Trying an earlier password…"
+            statusMessage = String(localized: "Trying an earlier password…")
             guard try await session.authenticate(password: Data(candidate.utf8)) else { continue }
             try? KeychainStore.save(password: candidate, deviceID: deviceID, synchronizable: sync)
             SH2Log.log("auth: the ring took an earlier stored password — keeping it")
@@ -189,7 +189,7 @@ final class DeviceController: ObservableObject {
         }
 
         guard try await session.authenticate(password: Data()) else { return false }
-        statusMessage = "Re-pairing…"
+        statusMessage = String(localized: "Re-pairing…")
         let password = reusablePassword(saved) ?? Recovery.generateDevicePassword()
         // Stored before the ring has it: if the reply is lost, the next connection still has it.
         try KeychainStore.save(password: password, deviceID: deviceID, synchronizable: sync)
@@ -223,12 +223,12 @@ final class DeviceController: ObservableObject {
         do {
             phase = .recovering
             // 1. Un-pair (clears the stored password in flash). Idempotent — safe to repeat.
-            statusMessage = "Un-pairing (reset-challenge)…"
+            statusMessage = String(localized: "Un-pairing (reset-challenge)…")
             try await Recovery.resetPairing(session: session)
             // 2. Re-pair (only works once the ring has rebooted). The password is stored first, so
             //    the ring never ends up with one this iPhone doesn't have; after the reboot,
             //    `start()` hands it to the un-paired ring.
-            statusMessage = "Re-pairing…"
+            statusMessage = String(localized: "Re-pairing…")
             let saved = KeychainStore.load(deviceID: deviceID)
             let password = reusablePassword(saved) ?? Recovery.generateDevicePassword()
             try KeychainStore.save(password: password, deviceID: deviceID,
@@ -244,7 +244,7 @@ final class DeviceController: ObservableObject {
                 // error) says nothing about the password and is a genuine error: "Try again".
                 if case .commandFailed(let step, let code) = e, step == "authenticate",
                    code == ReturnCode.fail.rawValue {
-                    statusMessage = "Un-paired ✓ — the ring must reboot once to finish."
+                    statusMessage = String(localized: "Un-paired ✓ — the ring must reboot once to finish.")
                     phase = .needsReboot
                 } else {
                     throw e
@@ -279,7 +279,7 @@ final class DeviceController: ObservableObject {
 
     private func finishReady() async {
         phase = .ready
-        statusMessage = "Connected."
+        statusMessage = String(localized: "Connected.")
         if let session { await installUpHandler(session) }
         await refreshInfo()
         await refreshDeviceState()
@@ -322,7 +322,7 @@ final class DeviceController: ObservableObject {
         do {
             _ = try await session.transceive(Commands.frontLight(on: on))
             lightOn = on
-        } catch { statusMessage = "front light failed: \(describe(error))" }
+        } catch { statusMessage = String(localized: "front light failed: \(describe(error))") }
     }
 
     func applyLightSettings() async {
@@ -331,7 +331,7 @@ final class DeviceController: ObservableObject {
         let level = UInt8(max(0, min(255, brightness.rounded())))
         do {
             _ = try await session.transceive(Commands.frontLightSettings(mode: mode, brightness: level))
-        } catch { statusMessage = "light settings failed: \(describe(error))" }
+        } catch { statusMessage = String(localized: "light settings failed: \(describe(error))") }
     }
 
     // MARK: - Ring effects (animations) + device settings
@@ -341,32 +341,32 @@ final class DeviceController: ObservableObject {
         let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let cmd = Commands.showClock(hour: UInt8(c.hour ?? 0), minute: UInt8(c.minute ?? 0))
         do { _ = try await session.transceive(cmd, label: "showClock") }
-        catch { statusMessage = "clock failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "clock failed: \(describe(error))") }
     }
 
     func showSpeedometerDemo() async {
         guard let session = readySession else { return }
         do { _ = try await session.transceive(Commands.showSpeedometer(percentage: 60, speed: 24), label: "speedometer") }
-        catch { statusMessage = "speedometer failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "speedometer failed: \(describe(error))") }
     }
 
     func showCharge() async {
         guard let session = readySession else { return }
         do { _ = try await session.transceive(Commands.showStateOfCharge(), label: "showCharge") }
-        catch { statusMessage = "charge anim failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "charge anim failed: \(describe(error))") }
     }
 
     func animationsOff() async {
         guard let session = readySession else { return }
         do { _ = try await session.transceive(Commands.animOff(), label: "animOff") }
-        catch { statusMessage = "anim off failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "anim off failed: \(describe(error))") }
     }
 
     /// Fire a display/ring command (fire-and-forget; errors surface in statusMessage + the live log).
     func run(_ cmd: Data, _ label: String) async {
         guard let session = readySession else { return }
         do { _ = try await session.transceive(cmd, label: label) }
-        catch { statusMessage = "\(label) failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "\(label) failed: \(describe(error))") }
     }
 
     // M1 — display widgets / assistant
@@ -399,10 +399,10 @@ final class DeviceController: ObservableObject {
         guard let session = readySession, !deviceName.isEmpty else { return false }
         do {
             _ = try await session.transceive(Commands.setName(deviceName), label: "setName")
-            statusMessage = "Renamed to “\(deviceName)”."
+            statusMessage = String(localized: "Renamed to “\(deviceName)”.")
             return true
         } catch {
-            statusMessage = "rename failed: \(describe(error))"
+            statusMessage = String(localized: "rename failed: \(describe(error))")
             return false
         }
     }
@@ -437,7 +437,7 @@ final class DeviceController: ObservableObject {
         let vigilant = vigilant ?? settings.alarmVigilant
         let armed = on && code != nil
         guard readySession != nil, let seed = await alarmSeed() else {
-            statusMessage = "alarm: couldn't get seed"
+            statusMessage = String(localized: "alarm: couldn't get seed")
             if !isChange { alarmSynced = false }
             return false
         }
@@ -445,7 +445,7 @@ final class DeviceController: ObservableObject {
                                           armed: armed, vigilant: vigilant)
         guard let r = await transceiveRetrying(cmd, "alarmConfigure"),
               r.first == ReturnCode.ok.rawValue else {
-            statusMessage = "alarm: the Halo rejected the configuration"
+            statusMessage = String(localized: "alarm: the Halo rejected the configuration")
             if !isChange { alarmSynced = false }
             return false
         }
@@ -491,7 +491,7 @@ final class DeviceController: ObservableObject {
         do {
             return try await session.transceive(cmd, label: label)
         } catch {
-            statusMessage = "\(label) failed: \(describe(error))"
+            statusMessage = String(localized: "\(label) failed: \(describe(error))")
             return nil
         }
     }
@@ -715,7 +715,7 @@ final class DeviceController: ObservableObject {
     func simulateNeedsRecovery() {
         guard isDemo, phase == .ready else { return }
         demoRecoveryPending = true
-        statusMessage = "DEMO: saved password rejected. Recovery required."
+        statusMessage = String(localized: "DEMO: saved password rejected. Recovery required.")
         SH2Log.log("DEMO: simulated password rejection — recovery required")
         phase = .needsRecovery
     }
@@ -723,20 +723,20 @@ final class DeviceController: ObservableObject {
     private func demoRecover() async {
         guard demoRecoveryPending, phase == .needsRecovery else { return }
         phase = .recovering
-        statusMessage = "Un-pairing (reset-challenge)…"
+        statusMessage = String(localized: "Un-pairing (reset-challenge)…")
         SH2Log.log("DEMO: reset-challenge (simulated)")
         try? await Task.sleep(for: .seconds(1.5))
-        statusMessage = "Un-paired ✓ — the ring must reboot once to finish."
+        statusMessage = String(localized: "Un-paired ✓ — the ring must reboot once to finish.")
         phase = .needsReboot
     }
 
     private func demoFinishRecovery() async {
         guard demoRecoveryPending else { return }
         phase = .connecting
-        statusMessage = "Connecting…"
+        statusMessage = String(localized: "Connecting…")
         try? await Task.sleep(for: .seconds(1.2))
         phase = .recovering
-        statusMessage = "Re-pairing…"
+        statusMessage = String(localized: "Re-pairing…")
         try? await Task.sleep(for: .seconds(0.8))
         demoRecoveryPending = false
         newlyGeneratedPassword = Recovery.generateDevicePassword()
@@ -751,7 +751,7 @@ final class DeviceController: ObservableObject {
         mock.simulateAlarm()
         await syncAlarm()
         if lastAlarmReport?.triggerCount ?? 0 == 0 {
-            statusMessage = "DEMO: turn the alarm on first."
+            statusMessage = String(localized: "DEMO: turn the alarm on first.")
         }
     }
 
@@ -856,17 +856,17 @@ final class DeviceController: ObservableObject {
         await restart(only: password)
         if phase == .ready { return true }
         await restart()
-        statusMessage = "That password was rejected by the ring."
+        statusMessage = String(localized: "That password was rejected by the ring.")
         return false
     }
 
     func forgetSavedPassword() {
         KeychainStore.delete(deviceID: deviceID)
-        statusMessage = "Saved password removed — recover again to re-pair."
+        statusMessage = String(localized: "Saved password removed — recover again to re-pair.")
     }
 
     func refreshAlarmReport() async {
-        if await fetchAlarmReport(recap: false) == nil { statusMessage = "alarm report unavailable" }
+        if await fetchAlarmReport(recap: false) == nil { statusMessage = String(localized: "alarm report unavailable") }
     }
 
     func refreshInfo() async {
@@ -877,7 +877,7 @@ final class DeviceController: ObservableObject {
                 firmwareVersion = r[1...4].map { "\($0)" }.joined(separator: ".")
                 bootloaderVersion = r[5...8].map { "\($0)" }.joined(separator: ".")
             }
-        } catch { statusMessage = "getVersions failed: \(describe(error))" }
+        } catch { statusMessage = String(localized: "getVersions failed: \(describe(error))") }
 
         do {
             let r = try await session.transceive(Commands.getSerial(0))
@@ -888,7 +888,7 @@ final class DeviceController: ObservableObject {
                 ? ascii!
                 : body.map { String(format: "%02x", $0) }.joined()
             serial = text.isEmpty ? "—" : text
-        } catch { statusMessage = "getSerial failed: \(describe(error))" }
+        } catch { statusMessage = String(localized: "getSerial failed: \(describe(error))") }
     }
 
     // MARK: - Helpers
