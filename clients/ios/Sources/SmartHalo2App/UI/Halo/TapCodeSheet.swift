@@ -10,13 +10,16 @@ struct TapCodeSheet: View {
     var controller: DeviceController?
 
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var connection: HaloConnection
     @Environment(\.dismiss) private var dismiss
     @State private var entry = ""
     @State private var saving = false
     @State private var failed = false
     @State private var saved = false
 
-    private var canEdit: Bool { controller != nil && !saving }
+    /// Connected right now, not only when the sheet opened: a Halo that drops meanwhile disables the pad.
+    private var isConnected: Bool { controller != nil && connection.state == .connected }
+    private var canEdit: Bool { isConnected && !saving }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xl) {
@@ -33,7 +36,7 @@ struct TapCodeSheet: View {
 
             pad
 
-            if controller == nil {
+            if !isConnected {
                 Label("Connect to your Halo to change the tap code.", systemImage: "antenna.radiowaves.left.and.right.slash")
                     .font(.footnote)
                     .foregroundStyle(Theme.warn)

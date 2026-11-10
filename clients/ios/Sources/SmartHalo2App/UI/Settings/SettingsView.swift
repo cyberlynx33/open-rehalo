@@ -150,6 +150,7 @@ struct SettingsView: View {
             TapCodeSheet(controller: isReady ? controller : nil)
             .presentationBackground(Theme.surface2)
             .environmentObject(settings)
+            .environmentObject(connection)
             .haloTheme()
         }
     }

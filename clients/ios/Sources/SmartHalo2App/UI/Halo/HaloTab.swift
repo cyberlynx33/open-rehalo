@@ -179,6 +179,7 @@ struct HaloHomeView: View {
             .presentationDetents([.large])
             .presentationBackground(Theme.surface2)
             .environmentObject(settings)
+            .environmentObject(connection)
             .haloTheme()
         }
         .confirmationDialog("Set a tap code first", isPresented: $askForTapCode, titleVisibility: .visible) {
