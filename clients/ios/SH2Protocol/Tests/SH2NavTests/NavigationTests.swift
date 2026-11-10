@@ -293,4 +293,15 @@ final class NavigationTests: XCTestCase {
         let b = [UInt8](r.commands[0].data)
         XCTAssertEqual(Int(Int16(bitPattern: UInt16(b[5]) << 8 | UInt16(b[6]))), -90)
     }
+
+    /// The iPhone's heading runs 0…360: facing 1° west of north, a destination at bearing 163° is 164°
+    /// to the right, not −196° (and never the −540° a GPS heading, in −180…180, can't produce).
+    func testCompassPhoneHeadingWrapsRoundNorth() {
+        var compass = CompassDirector(destination: point(north: -1000, east: 300), title: "Area 51")
+        let r = compass.update(point(north: 0, east: 0), heading: 359)
+        XCTAssertEqual(r.commands.map(\.label), ["navPointer"])
+        let b = [UInt8](r.commands[0].data)
+        let angle = Int(Int16(bitPattern: UInt16(b[5]) << 8 | UInt16(b[6])))
+        XCTAssertLessThanOrEqual(abs(angle - 164), 1)
+    }
 }

@@ -74,7 +74,9 @@ public struct CompassDirector: Sendable {
         let p = progress(fix)
         let distance = NavMath.trunc(destination.distance(to: currentLocation ?? fix)) - 50
         let colour = Commands.NavColour.progress(p)
-        let rider: Int? = heading.map { NavMath.trunc($0.rounded()) }
+        // The iPhone's heading is 0…360; in −180…180 like the GPS bearing, the angle sent stays in
+        // the (−360, 360) the official pointer has, instead of reaching −540 facing just west of north.
+        let rider: Int? = heading.map { NavMath.normalized(NavMath.trunc($0.rounded())) }
             ?? (bearing.crowFlies != NavBearing.unknown ? bearing.crowFlies : nil)
         if let rider {
             let angle = NavMath.trunc((fix.bearing(to: destination) - Double(rider)).rounded())
