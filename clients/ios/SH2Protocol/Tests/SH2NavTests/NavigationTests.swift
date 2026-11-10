@@ -220,6 +220,11 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(NavDirector.shortInstruction("Gira a la izquierda en Calle de Alcalá."), "Calle de Alcalá")
         XCTAssertEqual(NavDirector.shortInstruction("Turn left"), "Turn left")
         XCTAssertEqual(NavDirector.shortInstruction("Gira a la derecha"), "Gira a la derecha")
+        // "Toward X" is where the road leads: the road wins, and it's cut off the road's name.
+        XCTAssertEqual(NavDirector.shortInstruction("Head south on US-101 toward San Jose"), "US-101")
+        XCTAssertEqual(NavDirector.shortInstruction("Turn right onto Main St toward Downtown"), "Main St")
+        XCTAssertEqual(NavDirector.shortInstruction("Continue toward Place de la Concorde"), "Place de la Concorde")
+        XCTAssertEqual(NavDirector.shortInstruction("Incorpórate a Avinguda Diagonal hacia Sants"), "Avinguda Diagonal")
     }
 
     /// "Start at the nearest step": joining the second stretch skips the pointer back to the start.

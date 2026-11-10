@@ -441,13 +441,20 @@ public struct NavDirector: Sendable {
 
     /// Addition: a routed instruction ("Turn right onto Carrer Major", "Gira a la derecha
     /// hacia Av. Catalunya") shortened to the street for the OLED; the whole instruction when no
-    /// street is recognised.
+    /// street is recognised. "Toward X" names where the road leads, not the road: it only counts when
+    /// nothing else does, and is cut off a street that carries it ("on US-101 toward San Jose").
     public static func shortInstruction(_ instruction: String) -> String {
         let text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        let separators = [" onto ", " toward ", " towards ", " on ", " hacia ", " por ", " en ", " a "]
-        for sep in separators {
+        let streets = [" onto ", " on ", " por ", " en ", " a "]
+        let destinations = [" toward ", " towards ", " hacia "]
+        for sep in streets + destinations {
             guard let r = text.range(of: sep, options: [.caseInsensitive, .backwards]) else { continue }
-            let street = text[r.upperBound...].trimmingCharacters(in: .whitespaces)
+            var street = text[r.upperBound...].trimmingCharacters(in: .whitespaces)
+            if streets.contains(sep) {
+                for d in destinations {
+                    if let cut = street.range(of: d, options: .caseInsensitive) { street = String(street[..<cut.lowerBound]) }
+                }
+            }
             if let first = street.unicodeScalars.first,
                CharacterSet.uppercaseLetters.union(.decimalDigits).contains(first) {
                 return street.hasSuffix(".") ? String(street.dropLast()) : street
