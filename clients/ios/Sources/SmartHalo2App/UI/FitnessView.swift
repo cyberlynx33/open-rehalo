@@ -31,9 +31,7 @@ struct FitnessView: View {
                 Button { Task { await controller.showProgress(UInt8(progress * 100)) } } label: {
                     Label("Preview progress ring", systemImage: "circle.dashed")
                 }
-                Button { Task { await controller.showFitnessIntro() } } label: {
-                    Label("Fitness intro", systemImage: "figure.run")
-                }
+                // No "Fitness intro": the SH2 firmware draws {1,27} from an empty payload (invisible).
                 Button(role: .cancel) { Task { await controller.progressOff() } } label: {
                     Label("Clear", systemImage: "stop.circle")
                 }
