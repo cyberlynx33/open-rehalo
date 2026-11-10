@@ -338,6 +338,9 @@ struct RenameHaloView: View {
     @State private var failed = false
     @State private var busy = false
 
+    /// The nRF keeps this many bytes of the name and drops the rest.
+    static let maxNameBytes = 19
+
     var body: some View {
         Form {
             Section {
@@ -345,12 +348,16 @@ struct RenameHaloView: View {
                     .textInputAutocapitalization(.words)
                     .submitLabel(.done)
                     .onSubmit(save)
+                    .onChange(of: name) { _, new in
+                        let capped = Self.capped(new)
+                        if capped != new { name = capped }
+                    }
             } footer: {
                 if failed {
                     Text("Couldn't rename the Halo. Check it's connected and try again.")
                         .foregroundStyle(Theme.danger)
                 } else {
-                    Text("The new name is stored on the Halo itself.")
+                    Text("The new name is stored on the Halo itself, up to 19 characters.")
                 }
             }
             .listRowBackground(Theme.surface)
@@ -372,8 +379,19 @@ struct RenameHaloView: View {
         .onAppear { if name.isEmpty { name = connection.displayName ?? "" } }
     }
 
+    /// `name` cut to `maxNameBytes` of UTF-8 on a character boundary (accents and emoji take more
+    /// than one byte, so fewer of them fit).
+    static func capped(_ name: String) -> String {
+        var out = ""
+        for ch in name {
+            guard out.utf8.count + String(ch).utf8.count <= maxNameBytes else { break }
+            out.append(ch)
+        }
+        return out
+    }
+
     private func save() {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let trimmed = Self.capped(name.trimmingCharacters(in: .whitespaces))
         guard !trimmed.isEmpty else { return }
         busy = true
         failed = false

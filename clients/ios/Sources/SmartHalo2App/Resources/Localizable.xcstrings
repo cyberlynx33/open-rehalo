@@ -6444,23 +6444,6 @@
         }
       }
     },
-    "The new name is stored on the Halo itself." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The new name is stored on the Halo itself."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El nuevo nombre se guarda en el propio Halo."
-          }
-        }
-      }
-    },
     "The ring lights up with its charge level" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8055,6 +8038,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Parte de esta ruta es a pie."
+          }
+        }
+      }
+    },
+    "The new name is stored on the Halo itself, up to 19 characters." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The new name is stored on the Halo itself, up to 19 characters."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El nuevo nombre se guarda en el propio Halo, hasta 19 caracteres."
           }
         }
       }
