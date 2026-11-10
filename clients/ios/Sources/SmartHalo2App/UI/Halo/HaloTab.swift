@@ -270,7 +270,9 @@ struct HaloHomeView: View {
             .accessibilityHint(Text(alarmOn ? LocalizedStringKey("Turns the alarm off")
                                             : LocalizedStringKey("Turns the alarm on")))
 
-            if isReady, let report = controller.lastAlarmReport {
+            // With the alarm off, "didn't go off" would suggest it was watching: only when it was on
+            // (or something did set it off).
+            if isReady, let report = controller.lastAlarmReport, alarmOn || report.triggerCount > 0 {
                 AlarmRecap(count: report.triggerCount)
             }
 
