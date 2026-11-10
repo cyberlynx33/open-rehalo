@@ -108,6 +108,9 @@ final class GuidanceController: ObservableObject {
     @Published private(set) var canInvert = false
     /// Bumps when the wrong-way haptic should play: at most `maxWrongWayAlerts` in a row, ≥ 30 s apart.
     @Published private(set) var wrongWayAlerts = 0
+    /// Bumps whenever `route` gets new geometry (a new ride, `invert()`): `GPXRoute ==` only compares
+    /// ids, so the map keys its route layers on this too (docs/MAP_MATCHING_SPEC.md §9.3).
+    @Published private(set) var routeRevision = 0
 
     var locationAuthorized: Bool {
         locationStatus == .authorizedWhenInUse || locationStatus == .authorizedAlways
@@ -254,6 +257,7 @@ final class GuidanceController: ObservableObject {
         headingTracker?.stop()
         headingTracker = nil
         self.route = route
+        routeRevision += 1
         following = true
         summary = nil
         elapsed = 0
@@ -305,6 +309,7 @@ final class GuidanceController: ObservableObject {
         guard following, let route, let current = engine, let inverted = current.inverted() else { return }
         engine = inverted.engine
         self.route = GPXRoute(id: route.id, name: route.name, geometry: inverted.engine.route)
+        routeRevision += 1
         RideRecorder.shared.record(RideTrace.Entry(fix: nil, engine: inverted.engine, commands: inverted.commands,
                                                    event: "invert"))
         sendRing(inverted.commands)

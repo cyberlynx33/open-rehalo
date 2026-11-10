@@ -72,8 +72,8 @@ struct NavigatingView: View {
     }
 
     private var map: some View {
-        NavMap(follow: follow, route: guidance.route, startHeading: guidance.heading,
-               orientation: $orientation, freeHeading: $freeHeading)
+        NavMap(follow: follow, route: guidance.route, routeRevision: guidance.routeRevision,
+               startHeading: guidance.heading, orientation: $orientation, freeHeading: $freeHeading)
     }
 
     private func feedFix() {
@@ -262,6 +262,9 @@ struct NavigatingView: View {
 private struct NavMap: View {
     @ObservedObject var follow: FollowCamera
     let route: GPXRoute?
+    /// `GPXRoute ==` is by id: an inverted route keeps its id, so this is what tells SwiftUI the
+    /// layers below (polyline, start and finish markers) must be rebuilt.
+    let routeRevision: Int
     let startHeading: Double
     @Binding var orientation: MapOrientation
     @Binding var freeHeading: Double
