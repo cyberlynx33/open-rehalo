@@ -34,7 +34,11 @@ struct RootView: View {
         }
         .onChange(of: settings.hasCompletedOnboarding) { _, done in
             // Fresh from onboarding → the Map (first-run hint → search → demo route), UX_DESIGN §5.1.
-            if done && library.pendingDetail == nil { router.tab = .map }
+            // A re-run from Settings › Connection mode left Settings pushed on the Halo tab: pop it,
+            // or the next visit to Halo would land there instead of on the cards.
+            guard done else { return }
+            router.haloPath = []
+            if library.pendingDetail == nil { router.tab = .map }
         }
         // Recovery wizard (UX_DESIGN §4.7): chip, Halo tab, Advanced, or a pairing that needs it.
         .fullScreenCover(isPresented: $router.showRecovery) {
