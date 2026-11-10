@@ -627,7 +627,7 @@ final class DeviceController: ObservableObject {
             // Goal, calories, CO2: not fed by rehalo — keep the mask, the ring shows its defaults.
             data = Commands.carouselMask(mask)
         }
-        sendNav([NavCommand(data: data, label: "carousel")])
+        sendNav([NavCommand(data: data, label: "carousel")], droppable: true)
     }
 
     // MARK: - Tap shortcuts
@@ -754,26 +754,68 @@ final class DeviceController: ObservableObject {
     func runTouchOnboarding() async { await run(Commands.touchOnboarding(), "touchOnboarding") }
 
     // Navigation — driven by GuidanceController (`NavDirector`, reimplementation of the official app).
-    private var navQueue: Task<Void, Never>?
+
+    /// A batch of commands waiting for the ring, in the order they were queued.
+    private struct NavBatch {
+        let commands: [NavCommand]
+        /// A per-fix batch (the guidance's, a card's answer): the next one supersedes it when the
+        /// ring is slow to take them.
+        let droppable: Bool
+        var isCarouselAnswer: Bool { commands.count == 1 && commands[0].label == "carousel" }
+        var hasDelay: Bool { commands.contains { $0.delay > 0 } }
+        var labels: String { commands.map(\.label).joined(separator: ", ") }
+    }
+    private var navPending: [NavBatch] = []
+    private var navWorker: Task<Void, Never>?
+    /// Bumped by `cancelNav()`: a batch whose delay started under an older epoch is abandoned.
+    private var navEpoch = 0
+    /// Beyond this many waiting batches the oldest droppable ones go: with the ring slow to answer,
+    /// the per-fix batches would otherwise pile up and the ring later drain positions long gone.
+    private static let navPendingLimit = 4
 
     /// Send navigation commands strictly in order, one in flight at a time (the official SDK's FIFO
-    /// queue), after any earlier batch; a command's `delay` waits before it.
-    func sendNav(_ commands: [NavCommand]) {
+    /// queue), after any earlier batch; a command's `delay` waits before it. `droppable` marks a
+    /// batch the next one makes stale (a fix's guidance, a card's answer).
+    func sendNav(_ commands: [NavCommand], droppable: Bool = false) {
         guard !commands.isEmpty else { return }
-        let previous = navQueue
-        navQueue = Task { @MainActor [weak self] in
-            await previous?.value
-            for cmd in commands {
-                if cmd.delay > 0 { try? await Task.sleep(for: .seconds(cmd.delay)) }
-                await self?.transceiveWaiting(cmd.data, cmd.label)
-            }
+        let batch = NavBatch(commands: commands, droppable: droppable)
+        if batch.isCarouselAnswer, let i = navPending.firstIndex(where: { $0.isCarouselAnswer }) {
+            navPending[i] = batch           // the ring asks every second: only the newest answer counts
+        } else {
+            navPending.append(batch)
+        }
+        // Never a batch with a timed command (the arrival's `navOff` 10 s later) nor one the caller
+        // didn't mark: intros, stops, alerts and sounds always go out.
+        while navPending.count > Self.navPendingLimit,
+              let i = navPending.firstIndex(where: { $0.droppable && !$0.hasDelay }) {
+            let dropped = navPending.remove(at: i)
+            SH2Log.log("nav queue: dropped a stale batch (\(dropped.labels))")
+        }
+        if navWorker == nil {
+            navWorker = Task { @MainActor [weak self] in await self?.drainNav() }
         }
     }
 
-    /// `run` for the navigation queue: the session takes requests in order, so this only waits for
-    /// its turn and the reply.
-    private func transceiveWaiting(_ cmd: Data, _ label: String) async {
-        await run(cmd, label)
+    private func drainNav() async {
+        while !navPending.isEmpty {
+            let batch = navPending.removeFirst()
+            let epoch = navEpoch
+            for cmd in batch.commands {
+                if cmd.delay > 0 {
+                    try? await Task.sleep(for: .seconds(cmd.delay))
+                    if epoch != navEpoch { break }      // cancelled meanwhile: a new ride started
+                }
+                await run(cmd.data, cmd.label)
+            }
+        }
+        navWorker = nil
+    }
+
+    /// Drop the navigation commands not sent yet, delays included. A new ride calls it so that its
+    /// intro doesn't queue behind the previous ride's arrival sequence (a `navOff` 10 s later).
+    func cancelNav() {
+        navPending.removeAll()
+        navEpoch &+= 1
     }
 
     // Device settings (M4)
