@@ -54,7 +54,9 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
     /// Every link drop, delivered on the main thread. `HaloConnection` uses it to auto-reconnect.
     let disconnects = PassthroughSubject<DisconnectEvent, Never>()
 
-    private var manager: CBCentralManager!
+    /// Created on first use (`activate()`): creating it is what triggers iOS's Bluetooth permission
+    /// prompt, so it waits until there is a ring to reconnect to or the pairing step scans.
+    private var manager: CBCentralManager?
     private let bleQueue = DispatchQueue(label: "com.sh2.smarthalo2.ble")
 
     // Connection coordination (touched only on bleQueue).
@@ -66,14 +68,28 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
 
     override init() {
         super.init()
-        manager = CBCentralManager(delegate: self, queue: bleQueue)
+    }
+
+    /// Start Bluetooth (and, the first time, iOS's permission prompt). Called where the app has a
+    /// reason the user has seen: a saved Halo to reconnect to, the pairing step's scan. Until then
+    /// `state` stays `.unknown`.
+    func activate() {
+        bleQueue.async { self.ensureManager() }
+    }
+
+    /// On `bleQueue`. The system's own "turn on Bluetooth" alert is off: the app's screens say it.
+    private func ensureManager() {
+        guard manager == nil else { return }
+        manager = CBCentralManager(delegate: self, queue: bleQueue,
+                                   options: [CBCentralManagerOptionShowPowerAlertKey: false])
     }
 
     // MARK: - Scanning
 
     func startScan() {
         bleQueue.async {
-            guard self.manager.state == .poweredOn else { return }
+            self.ensureManager()
+            guard let manager = self.manager, manager.state == .poweredOn else { return }
             self.publishMain { self.discovered = []; self.isScanning = true }
             // Scan by the vendor service UUID, as instructed by the protocol port.
             //
@@ -85,7 +101,7 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
             let services: [CBUUID]? = scanByServiceOnly
                 ? [CBUUID(string: Frame.UUIDs.service), CBUUID(string: "5348")]
                 : nil
-            self.manager.scanForPeripherals(
+            manager.scanForPeripherals(
                 withServices: services,
                 options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
             )
@@ -94,7 +110,7 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
 
     func stopScan() {
         bleQueue.async {
-            self.manager.stopScan()
+            self.manager?.stopScan()
             self.publishMain { self.isScanning = false }
         }
     }
@@ -108,8 +124,9 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
     func retrieveDevice(id: UUID, name fallbackName: String?) async -> DiscoveredDevice? {
         await withCheckedContinuation { cont in
             bleQueue.async {
-                guard self.manager.state == .poweredOn,
-                      let p = self.manager.retrievePeripherals(withIdentifiers: [id]).first
+                self.ensureManager()
+                guard let manager = self.manager, manager.state == .poweredOn,
+                      let p = manager.retrievePeripherals(withIdentifiers: [id]).first
                 else { cont.resume(returning: nil); return }
                 cont.resume(returning: DiscoveredDevice(
                     id: p.identifier,
@@ -133,7 +150,8 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
         SH2Log.log("central: connecting to “\(device.name)” [\(device.id.uuidString.prefix(8))]…")
         let transport: BluetoothTransport = try await withCheckedThrowingContinuation { cont in
             bleQueue.async {
-                guard self.manager.state == .poweredOn else {
+                self.ensureManager()
+                guard let manager = self.manager, manager.state == .poweredOn else {
                     cont.resume(throwing: CentralError.poweredOff); return
                 }
                 // Never leak a pending continuation: fail the older connect before replacing it.
@@ -145,7 +163,7 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
                 // complete, into nobody's hands, whenever that ring came into range.
                 if let old = self.connectingPeripheral, old.identifier != peripheral.identifier {
                     self.intentionalDisconnects.insert(old.identifier)
-                    self.manager.cancelPeripheralConnection(old)
+                    manager.cancelPeripheralConnection(old)
                 }
                 self.intentionalDisconnects.remove(peripheral.identifier)
                 self.connectContinuation = cont
@@ -153,11 +171,11 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
                 // Diagnostics: already connected to this iPhone means a link the previous launch
                 // left up, or another app's. Either way the ring may still be on someone else's keys.
                 let service = CBUUID(string: Frame.UUIDs.service)
-                if self.manager.retrieveConnectedPeripherals(withServices: [service])
+                if manager.retrieveConnectedPeripherals(withServices: [service])
                     .contains(where: { $0.identifier == peripheral.identifier }) {
                     SH2Log.log("central: the Halo is already connected to this iPhone (a link left up by the previous launch, or another app)")
                 }
-                self.manager.connect(peripheral, options: nil)
+                manager.connect(peripheral, options: nil)
             }
         }
         // Discovery runs on the transport (which is now the peripheral's delegate).
@@ -171,7 +189,7 @@ final class BluetoothCentral: NSObject, ObservableObject, @unchecked Sendable {
         bleQueue.async {
             if let p = self.connectingPeripheral {
                 self.intentionalDisconnects.insert(p.identifier)
-                self.manager.cancelPeripheralConnection(p)
+                self.manager?.cancelPeripheralConnection(p)
             }
             // Cancelling a *pending* connect doesn't reliably produce a delegate callback, so fail
             // the waiting connect() here.
