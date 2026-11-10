@@ -42,6 +42,9 @@ public struct WrongWayDetector: Sendable {
         public var confirmSpacing = 3.0
         /// Along the route this far past the lowest point of the episode: going forward again.
         public var forwardExit = 30.0
+        /// A suspicion ends after this many fixes in a row under `minimumSpeed`: stopped, it can be
+        /// neither confirmed nor cleared, and it would hold the step until the rider moved again.
+        public var suspectedStopFixes = 3
         public init() {}
     }
 
@@ -74,6 +77,7 @@ public struct WrongWayDetector: Sendable {
     var history: [(odometer: Double, along: Double)] = []
     var lowestAlong = 0.0
     var forwardFixes = 0
+    var stoppedFixes = 0
     var evaluations = 0
     var lastEvaluation: Double?
 
@@ -83,6 +87,10 @@ public struct WrongWayDetector: Sendable {
 
     /// True while the step sync must hold still: anything but `none`.
     public var isActive: Bool { state != .none }
+    /// True while the rider has been warned (and hasn't turned round yet): `confirmed` or `ignored`.
+    /// A mere suspicion holds the step, not the arrival: one raised by GPS noise on the last metres,
+    /// with the rider then stopped at the destination, would otherwise hold the arrival for good.
+    public var isWarning: Bool { state == .confirmed || state == .ignored }
 
     public mutating func update(_ input: Input) {
         if input.onRoute {
@@ -100,6 +108,13 @@ public struct WrongWayDetector: Sendable {
             if input.along > lowestAlong + parameters.forwardExit { end(); return }
             lowestAlong = min(lowestAlong, input.along)
         }
+        if state == .suspected {
+            // Stopped, a suspicion can be neither confirmed nor cleared (nothing below runs under
+            // `minimumSpeed`): dropped, rather than holding the step until the rider moves again.
+            // Riding on against the route raises it again at once.
+            stoppedFixes = input.speed < parameters.minimumSpeed ? stoppedFixes + 1 : 0
+            if stoppedFixes >= parameters.suspectedStopFixes { end(); return }
+        }
         guard input.eligible, input.speed >= parameters.minimumSpeed, let c = input.cos else { return }
 
         switch state {
@@ -111,6 +126,7 @@ public struct WrongWayDetector: Sendable {
             evaluations = 0
             lastEvaluation = nil
             forwardFixes = 0
+            stoppedFixes = 0
             confirm(input, c)
         case .suspected, .confirmed, .ignored:
             if max(c, input.courseCos ?? -1) >= parameters.exit {
@@ -151,5 +167,6 @@ public struct WrongWayDetector: Sendable {
         evaluations = 0
         lastEvaluation = nil
         forwardFixes = 0
+        stoppedFixes = 0
     }
 }

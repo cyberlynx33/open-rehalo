@@ -371,9 +371,11 @@ public struct RouteMatcher: Sendable {
         case .rejoining: status = .rejoining
         case .on, .leaving: status = .on
         }
+        // A warning holds the arrival (riding the wrong way, the end is behind); a suspicion only holds
+        // the step, or GPS noise on the last metres would hold the arrival with the rider stopped there.
         last = Result(status: status, accepted: true, best: best, candidates: cands, confident: confident,
                       unambiguous: unambiguous, distanceToRoute: dMin, travel: heading, coverage: coverage,
-                      arrived: arrived && !wrongWay.isActive, joined: joined, wrongWay: wrongWay.state,
+                      arrived: arrived && !wrongWay.isWarning, joined: joined, wrongWay: wrongWay.state,
                       accuracy: a)
         return last
     }

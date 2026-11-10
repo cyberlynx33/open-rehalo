@@ -739,3 +739,26 @@ final class MatchedEngineTests: XCTestCase {
         XCTAssertTrue(String(decoding: record(.matched).lines[1], as: UTF8.self).contains("\"match\""))
     }
 }
+
+/// The wrong-way state machine on its own inputs.
+final class WrongWayDetectorTests: XCTestCase {
+
+    func input(_ t: Double, speed: Double = 5, along: Double, odometer: Double, cos: Double?) -> WrongWayDetector.Input {
+        WrongWayDetector.Input(time: t, speed: speed, onRoute: true, eligible: true, along: along, odometer: odometer,
+                               cos: cos, otherLeg: false, courseCos: nil)
+    }
+
+    /// A suspicion (the movement opposes the route, but along isn't dropping) holds the step and not
+    /// the arrival, and a stop drops it: stopped, it could be neither confirmed nor cleared.
+    func testASuspicionEndsWhenTheRiderStopsAndIsNoWarning() {
+        var d = WrongWayDetector()
+        for i in 0..<30 { d.update(input(Double(i), along: Double(i) * 5, odometer: Double(i) * 5, cos: 1)) }
+        XCTAssertEqual(d.state, .none)
+        for i in 30..<34 { d.update(input(Double(i), along: 150, odometer: 150 + Double(i - 30) * 2, cos: -0.9)) }
+        XCTAssertEqual(d.state, .suspected)
+        XCTAssertTrue(d.isActive)
+        XCTAssertFalse(d.isWarning)
+        for i in 34..<37 { d.update(input(Double(i), speed: 0, along: 150, odometer: 156, cos: nil)) }
+        XCTAssertEqual(d.state, .none)
+    }
+}
