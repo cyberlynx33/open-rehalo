@@ -251,6 +251,9 @@ final class GuidanceController: ObservableObject {
 
     /// Reset everything for a new ride along `route` and start the clock and the rider.
     private func begin(_ route: GPXRoute, _ ride: RideEngine) {
+        // Whatever the previous ride left for the ring (an arrival's `navOff` 10 s later, fixes the
+        // ring hasn't taken yet) must not delay this ride's intro.
+        controller?.cancelNav()
         if following { finish(completed: false, showSummary: false) }
         engine = ride
         compassTarget = nil
@@ -405,7 +408,8 @@ final class GuidanceController: ObservableObject {
         engine = ride
         RideRecorder.shared.record(RideTrace.Entry(fix: fix, engine: ride, commands: result.commands,
                                                    arrived: result.arrived))
-        sendRing(result.commands)
+        // A fix's commands are superseded by the next fix's; the arrival sequence never is.
+        sendRing(result.commands, droppable: !result.arrived)
         if result.arrived {
             finish(completed: true)
             return
@@ -458,9 +462,11 @@ final class GuidanceController: ObservableObject {
 
     // MARK: - Ring (official navigation)
 
-    private func sendRing(_ commands: [NavCommand]) {
+    /// `droppable`: a batch the next one makes stale (a fix's guidance, a card's answer), which the
+    /// ring's queue may skip when it falls behind.
+    private func sendRing(_ commands: [NavCommand], droppable: Bool = false) {
         guard connection.state == .connected, let ring = controller else { return }
-        ring.sendNav(commands)
+        ring.sendNav(commands, droppable: droppable)
     }
 
     /// The ring reports its carousel card; on the Navigation card it gets the card's content
@@ -472,7 +478,7 @@ final class GuidanceController: ObservableObject {
         carouselSub = controller?.$carouselCard
             .sink { [weak self] card in
                 guard let self, self.following, let cmds = self.engine?.carouselChanged(card: card) else { return }
-                self.sendRing(cmds)
+                self.sendRing(cmds, droppable: true)
             }
     }
 }
