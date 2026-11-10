@@ -815,12 +815,14 @@ struct MapTab: View {
     }
 }
 
-/// Round floating map button (recenter, frame route, compass…).
+/// Round floating map button (recenter, frame route, compass…). `size` is 48 pt on the Map tab;
+/// Navigating passes `Theme.minTargetRiding` (UX_DESIGN §6: 56 pt on a ride).
 struct MapRoundButton: View {
     let systemImage: String
     let label: LocalizedStringKey
     var isOn: Bool = false
     var rotation: Double = 0
+    var size: CGFloat = 48
     let action: () -> Void
 
     var body: some View {
@@ -829,7 +831,7 @@ struct MapRoundButton: View {
                 .font(.system(size: 18, weight: .semibold))
                 .rotationEffect(.degrees(rotation))
                 .foregroundStyle(isOn ? Theme.onAccent : Theme.text)
-                .frame(width: 48, height: 48)
+                .frame(width: size, height: size)
                 .background(isOn ? Theme.accent : Theme.surface.opacity(0.94), in: Circle())
                 .overlay(Circle().strokeBorder(isOn ? Color.clear : Theme.stroke, lineWidth: 1))
                 .contentShape(Circle())

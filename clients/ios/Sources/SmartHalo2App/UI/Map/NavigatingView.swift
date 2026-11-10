@@ -125,11 +125,12 @@ struct NavigatingView: View {
                 }
                 Spacer(minLength: 0)
                 VStack(spacing: Theme.Space.s) {
+                    // Riding targets (UX_DESIGN §6: 56 pt), unlike the Map tab's 48 pt column.
                     OrientationButton(orientation: orientation, mapHeading: freeHeading,
-                                      action: toggleOrientation)
+                                      size: Theme.minTargetRiding, action: toggleOrientation)
                     if orientation == .free {
                         MapRoundButton(systemImage: "location.fill", label: "Center on my position",
-                                       action: recenter)
+                                       size: Theme.minTargetRiding, action: recenter)
                     }
                 }
             }
@@ -472,8 +473,8 @@ struct WrongWayBanner: View {
                         Label("Invert route", systemImage: "arrow.left.arrow.right")
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(Theme.onAccent)
-                            .padding(.horizontal, Theme.Space.m)
-                            .frame(minHeight: 44)
+                            .padding(.horizontal, Theme.Space.l)
+                            .frame(minHeight: Theme.minTargetRiding)
                             .background(Theme.warn, in: Capsule())
                     }
                     .buttonStyle(.plain)
@@ -482,8 +483,8 @@ struct WrongWayBanner: View {
                     Text("Ignore")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(Theme.warn)
-                        .padding(.horizontal, Theme.Space.m)
-                        .frame(minHeight: 44)
+                        .padding(.horizontal, Theme.Space.l)
+                        .frame(minHeight: Theme.minTargetRiding)
                         .overlay(Capsule().strokeBorder(Theme.warn.opacity(0.6), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
