@@ -124,8 +124,17 @@ final class HaloConnection: ObservableObject {
             return
         }
         retryTask?.cancel()
-        if controller.phase == .ready { return }
-        Task { await controller.start() }
+        switch controller.phase {
+        case .ready:
+            return
+        case .connecting, .authenticating:
+            // A connect or a handshake is in flight: a second `start()` over it would ask
+            // CoreBluetooth to connect a peripheral that already is, and could leave the ring
+            // authenticated with the app stuck in "Connecting…". Begin again from a clean link.
+            Task { await controller.restart() }
+        default:
+            Task { await controller.start() }
+        }
     }
 
     /// User-initiated disconnect (no auto-reconnect until `retry()`).

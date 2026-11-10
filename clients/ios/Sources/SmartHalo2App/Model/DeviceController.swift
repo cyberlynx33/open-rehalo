@@ -259,12 +259,20 @@ final class DeviceController: ObservableObject {
     /// runs again and asks for the reboot again.
     func reconnectAndFinish() async {
         if isDemo { await demoFinishRecovery(); return }
-        close()
-        try? await Task.sleep(for: .seconds(1))   // let the disconnect settle before reconnecting
-        await start()
+        await restart()
         if case .needsRecovery = phase {
             await recover()
         }
+    }
+
+    /// Let go of the current link (or pending connect) and connect again from scratch. The pause
+    /// lets CoreBluetooth report the old link's disconnect before the new connect is registered.
+    /// `start()` is not reentrant: a `start()` over a link that is being set up would give one link
+    /// two owners, so a retry during `.connecting`/`.authenticating` comes through here.
+    func restart(only typed: String? = nil) async {
+        close()
+        try? await Task.sleep(for: .seconds(1))
+        await start(only: typed)
     }
 
     private func finishReady() async {
@@ -806,13 +814,9 @@ final class DeviceController: ObservableObject {
     func useSavedPassword(_ password: String) async -> Bool {
         let password = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !password.isEmpty, !isDemo else { return false }
-        close()
-        try? await Task.sleep(for: .seconds(1))   // let the disconnect settle before reconnecting
-        await start(only: password)
+        await restart(only: password)
         if phase == .ready { return true }
-        close()
-        try? await Task.sleep(for: .seconds(1))
-        await start()
+        await restart()
         statusMessage = "That password was rejected by the ring."
         return false
     }
