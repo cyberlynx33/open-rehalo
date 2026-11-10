@@ -76,13 +76,15 @@ struct DisplayView: View {
     private var frontLightSection: some View {
         Section("Front light") {
             Toggle("External (handlebar) light", isOn: $frontExternal)
-                .onChange(of: frontExternal) { newValue in
-                    Task { await controller.setFrontExternal(on: newValue) }
+                .onChange(of: frontExternal) { _, on in
+                    Task { await controller.setFrontExternal(on: on) }
                 }
         }
     }
 
-    private func actionRow(_ title: String, _ icon: String, _ action: @escaping () async -> Void) -> some View {
+    /// A `LocalizedStringKey` title, so the row goes through the String Catalog (a `String` would not).
+    private func actionRow(_ title: LocalizedStringKey, _ icon: String,
+                           _ action: @escaping () async -> Void) -> some View {
         Button { Task { await action() } } label: { Label(title, systemImage: icon) }
     }
 }

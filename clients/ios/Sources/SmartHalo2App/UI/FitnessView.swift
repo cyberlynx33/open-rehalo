@@ -4,20 +4,24 @@ import SwiftUI
 /// Live GPS ride recording (auto-tracking toward the goal) is deferred — see docs/APP_SPEC.md M5.
 struct FitnessView: View {
     @ObservedObject var controller: DeviceController
+    @EnvironmentObject private var settings: AppSettings
+    /// Stored in kilometres whatever the units setting; shown through `UnitFormat`.
     @AppStorage("sh2.fitness.goalKm") private var goalKm: Double = 20
     @AppStorage("sh2.fitness.doneKm") private var doneKm: Double = 0
 
+    private var fmt: UnitFormat { settings.unitFormat }
     private var progress: Double { goalKm > 0 ? min(1, doneKm / goalKm) : 0 }
+    private var percent: Int { Int((progress * 100).rounded()) }
 
     var body: some View {
         List {
             Section("Goal") {
                 VStack(alignment: .leading) {
-                    Text("Daily goal: \(goalKm, specifier: "%.0f") km")
+                    Text("Daily goal: \(fmt.distance(goalKm * 1000))")
                     Slider(value: $goalKm, in: 5...100, step: 5)
                 }
                 VStack(alignment: .leading) {
-                    Text("Done: \(doneKm, specifier: "%.1f") km · \(Int(progress * 100))%")
+                    Text("Done: \(fmt.distance(doneKm * 1000)) · \(percent)%")
                     Slider(value: $doneKm, in: 0...max(goalKm, 5), step: 0.5)
                 }
                 ProgressView(value: progress)

@@ -2,14 +2,17 @@ import SwiftUI
 
 /// Rides history pulled from the self-hosted server (`GET /api/v1/users/rides`).
 struct RidesView: View {
+    @EnvironmentObject private var settings: AppSettings
     @State private var rides: [SH2PastRide] = []
     @State private var loading = false
     @State private var error: String?
 
+    private var fmt: UnitFormat { settings.unitFormat }
+
     var body: some View {
         List {
             if loading { HStack { ProgressView(); Text("Loading…") } }
-            if let error { Text(error).foregroundStyle(.red).font(.footnote) }
+            if let error { Text(verbatim: error).foregroundStyle(.red).font(.footnote) }
             if !loading && error == nil && rides.isEmpty {
                 Text("No rides yet.").foregroundStyle(.secondary)
             }
@@ -18,11 +21,13 @@ struct RidesView: View {
                     RideDetailView(ride: ride)
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(ride.start ?? ride.stamp ?? "Ride \(ride.id ?? 0)").font(.headline)
+                        Text(verbatim: ride.start ?? ride.stamp ?? String(localized: "Ride \(ride.id ?? 0)"))
+                            .font(.headline)
+                        // The server reports metres, seconds and km/h; shown in the rider's units.
                         HStack(spacing: 14) {
-                            metric("km", ride.distance.map { $0 / 1000 })
-                            metric("min", ride.duration.map { $0 / 60 })
-                            metric("km/h", ride.averageSpeed)
+                            if let metres = ride.distance { Text(verbatim: fmt.distance(metres)) }
+                            if let seconds = ride.duration { Text(verbatim: fmt.duration(seconds)) }
+                            if let kmh = ride.averageSpeed { Text(verbatim: fmt.speed(kmh / 3.6)) }
                         }
                         .font(.caption).foregroundStyle(.secondary)
                     }
@@ -35,15 +40,9 @@ struct RidesView: View {
         .refreshable { await load() }
     }
 
-    private func metric(_ unit: String, _ value: Double?) -> some View {
-        Group {
-            if let v = value { Text("\(v, specifier: "%.1f") \(unit)") }
-        }
-    }
-
     private func load() async {
         guard let url = AppSettings.shared.serverURL, let jwt = TokenStore.load(.access) else {
-            error = "Not signed in."; return
+            error = String(localized: "Not signed in."); return
         }
         loading = true; error = nil
         defer { loading = false }
