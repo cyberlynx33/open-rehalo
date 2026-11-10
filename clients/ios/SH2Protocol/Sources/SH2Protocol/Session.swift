@@ -176,7 +176,7 @@ public actor Session {
         let useCipher = (crypted ?? (cipher != nil)) ? cipher : nil
         let encoded = try Frame.encodeMessage(appData, cipher: useCipher)
         let tag = label.isEmpty ? "cmd \(SH2Log.hex(appData, max: 4))" : label
-        SH2Log.log("→ \(tag)  [\(SH2Log.hex(appData))]")
+        SH2Log.log("→ \(tag)  [\(Self.loggable(appData))]")
 
         pendingID &+= 1
         let myID = pendingID
@@ -191,6 +191,17 @@ public actor Session {
             // clean disconnect), fail after the timeout instead of hanging forever.
             Task { await self.timeoutGuard(myID) }
         }
+    }
+
+    /// The request bytes for the log. `authenticate` {0,3} and `setPassword` {0,4} carry the device
+    /// password, which must never reach the live log (it can be copied from the console): only their
+    /// header and length are shown.
+    static func loggable(_ appData: Data) -> String {
+        let b = [UInt8](appData)
+        if b.count >= 2, b[0] == 0, b[1] == 3 || b[1] == 4 {
+            return "\(SH2Log.hex(Data(b.prefix(2)))) … (\(b.count)B, password redacted)"
+        }
+        return SH2Log.hex(appData)
     }
 
     private func sendFrames(_ encoded: Frame.Encoded) async {
