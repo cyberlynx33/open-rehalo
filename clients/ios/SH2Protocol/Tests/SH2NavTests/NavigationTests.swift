@@ -213,6 +213,23 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(ride(nearest: false).labels.first, "navPointerStandby")
     }
 
+    /// Matched engine: while the matcher waits to rejoin, the guidance doesn't compute the pointer.
+    /// The direction of travel appearing on one of those fixes must not send the 999 placeholder as
+    /// an angle: the ring keeps "ride to calibrate" until there is one.
+    func testRejoiningKeepsRideToCalibrateUntilThePointerHasAnAngle() {
+        var director = NavDirector(points: lRoute(), title: "Office")
+        director.enableMatching(stepAlong: [0, 200, 400])
+        let match = NavMatch(status: .rejoining, target: point(north: 0, east: 0), along: 0, distance: 30,
+                             confident: false, unambiguous: true)
+        var labels: [String] = []
+        for i in 0...8 {
+            labels += director.update(point(north: 0, east: -40 + Double(i) * 5), match: match).commands.map(\.label)
+        }
+        XCTAssertNotEqual(director.guidance?.bearing.crowFlies, NavBearing.unknown)
+        XCTAssertFalse(labels.isEmpty)
+        XCTAssertTrue(labels.allSatisfy { $0 == "navPointerStandby" })
+    }
+
     // MARK: - As the crow flies
 
     func testCompassPointsAtTheDestinationAndArrives() {

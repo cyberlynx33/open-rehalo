@@ -289,10 +289,13 @@ public struct NavDirector: Sendable {
     // MARK: - Java dispatch
 
     /// `processGPSCompassModeResults` (off the path): "ride to calibrate" until the direction of
-    /// travel is known, then the orange pointer to the route.
+    /// travel is known, then the orange pointer to the route. The original asks the bearings; this
+    /// asks whether the pointer has an angle, which is the same thing on the official flow (the
+    /// angle is set on the fix the direction appears) and also right when the angle comes from the
+    /// matcher's direction, or hasn't been computed yet on a fix the matcher held or kept rejoining.
     func gpsCompassResults(_ ds: NavDisplayStatus, _ g: NavGuidance) -> [NavCommand] {
         let text = Self.instructionText(ds.deviceInstruction) ?? ds.deviceInstruction
-        if g.bearing.current == NavBearing.unknown && g.bearing.crowFlies == NavBearing.unknown {
+        if ds.bearing == NavBearing.unknown {
             return [NavCommand(data: Commands.navPointerStandby(distance: distanceToDestination - 50, text: text,
                                                                 metric: settings.metric,
                                                                 colour: Commands.NavColour.progress(ds.progress)),

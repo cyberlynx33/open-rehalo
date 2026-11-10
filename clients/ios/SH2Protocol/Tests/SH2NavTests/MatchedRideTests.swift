@@ -494,6 +494,34 @@ final class MatchedEngineTests: XCTestCase {
         XCTAssertFalse(e.snapshot.offRoute)
     }
 
+    /// Under ~12.6 km/h consecutive fixes are under 3.5 m apart and `NavBearing` never gets a direction:
+    /// the official flow then never says "off route". The matched engine says so anyway, with the
+    /// pointer on the matcher's own direction of travel.
+    func testSlowRiderOffRouteIsShownWithoutAGPSHeading() {
+        let route = RideSim.route([(0, 0), (0, 1000)])
+        let away = RideSim.route([(0, 200), (300, 500)])        // north-east, the route behind to the left
+        var sim = RideSim(seed: 1, sigma: 0)
+        var e = engine(route)
+        for (fix, _) in sim.ride(route, to: 200, speed: 2.5) { _ = e.update(fix) }
+        XCTAssertFalse(e.snapshot.offRoute)
+        var labels: [String] = []
+        var angles: [Int] = []
+        for (fix, _) in sim.ride(away, speed: 2.5) {
+            let r = e.update(fix)
+            labels += r.commands.map(\.label)
+            angles += r.commands.filter { $0.label == "navPointer" }.map {
+                let b = [UInt8]($0.data)
+                return Int(Int16(bitPattern: UInt16(b[5]) << 8 | UInt16(b[6])))
+            }
+        }
+        XCTAssertEqual(e.director?.guidance?.bearing.crowFlies, NavBearing.unknown)
+        XCTAssertTrue(e.snapshot.offRoute)
+        XCTAssertNotNil(e.snapshot.offRouteBearing)
+        XCTAssertTrue(labels.contains("navPointer"))
+        XCTAssertTrue(angles.allSatisfy { $0 <= -60 && $0 >= -180 })
+        XCTAssertLessThanOrEqual(abs((angles.last ?? 0) + 135), 25)
+    }
+
     func testMissedTurnThenBackToIt() {
         // North 400 then east; the rider overshoots the corner by 100 m, comes back and turns.
         let route = RideSim.route([(0, 0), (0, 400), (400, 400)])

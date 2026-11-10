@@ -63,11 +63,16 @@ public struct NavMatch: Equatable, Sendable {
     /// Wrong way suspected, confirmed or ignored: the step must hold still.
     public var frozen: Bool
     public var arrived: Bool
+    /// The matcher's direction of travel (degrees, −180…180), from displacement: it exists at any
+    /// speed, where `NavBearing` needs > 3.5 m between fixes. The pointer falls back on it.
+    public var travel: Int?
 
     public init(status: RouteMatcher.Status, target: NavLocation, along: Double = 0, distance: Double = .infinity,
-                confident: Bool = false, unambiguous: Bool = false, frozen: Bool = false, arrived: Bool = false) {
+                confident: Bool = false, unambiguous: Bool = false, frozen: Bool = false, arrived: Bool = false,
+                travel: Int? = nil) {
         self.status = status; self.target = target; self.along = along; self.distance = distance
         self.confident = confident; self.unambiguous = unambiguous; self.frozen = frozen; self.arrived = arrived
+        self.travel = travel
     }
 }
 
@@ -409,7 +414,8 @@ public struct NavGuidance: Sendable {
     ///
     /// With a `match` (matched engine): the target is the matcher's, the rejoin is the matcher's `on`
     /// (through the same branch, which clears the pointer and plays "back on route"), the step never
-    /// moves here, and while the matcher waits to rejoin the ring keeps what it shows.
+    /// moves here, while the matcher waits to rejoin the ring keeps what it shows, and the rider's
+    /// direction falls back on the matcher's when `NavBearing` has none (under ~12.6 km/h).
     mutating func executeGPXCompassMode(_ loc: NavLocation, _ cur: NavStep, _ next: inout NavStep,
                                         _ match: NavMatch? = nil) {
         if match?.status == .rejoining { return }
@@ -418,7 +424,7 @@ public struct NavGuidance: Sendable {
         let d = loc.distance(to: target)
         display.distanceToThisManeuver = Int(d.rounded())
         let brg = Int(loc.bearing(to: target))
-        let crow = bearing.crowFlies
+        let crow = bearing.crowFlies != NavBearing.unknown ? bearing.crowFlies : (match?.travel ?? NavBearing.unknown)
         let headingToPath = crow != NavBearing.unknown && NavMath.smallerGap(crow, brg) < 40
 
         if match.map({ $0.status == .on }) ?? (d < 15) {
@@ -465,6 +471,12 @@ public struct NavGuidance: Sendable {
                 turnStarted = false
                 display.progress = Self.returnToPathProgress(loc, target, Float(lastOffPathDistance))
                 display.bearing = brg - crow
+                offlineStatus = .offPath
+            } else if match != nil {
+                // Addition (matched engine): off the route is the matcher's call, direction or not.
+                // The original only says so once it has one, so a rider who never went faster than
+                // ~12.6 km/h got no warning at all; the director shows "Ride to calibrate" meanwhile.
+                turnStarted = false
                 offlineStatus = .offPath
             }
             offPathDestination = target

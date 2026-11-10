@@ -226,7 +226,8 @@ public struct RideEngine: Sendable {
             : NavLocation(start.lat, start.lon)
         return NavMatch(status: r.status, target: target, along: best?.along ?? 0,
                         distance: best?.distance ?? .infinity, confident: r.confident,
-                        unambiguous: r.unambiguous, frozen: r.wrongWay != .none, arrived: r.arrived)
+                        unambiguous: r.unambiguous, frozen: r.wrongWay != .none, arrived: r.arrived,
+                        travel: r.travel.map { NavMath.normalized(NavMath.trunc($0.bearing.rounded())) })
     }
 
     // MARK: - Wrong way (matched engine)
