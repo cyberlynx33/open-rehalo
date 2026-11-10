@@ -151,6 +151,18 @@ final class CommandsTests: XCTestCase {
                        [1, 7, 253, 237, 255, 253, 237, 0, 0, 0xc8, 0, 0x32, 0, 0x64, 0, 0x0a, 3, 69])
     }
 
+    /// Navigation card: `[1,35, 0, mask LE(4)] + D(4) + angle(2) + white(3) + text`, a 16-byte header.
+    func testCarouselNavigationCardLayout() {
+        let mask: UInt16 = 0x02fd
+        XCTAssertEqual([UInt8](Commands.carouselNavigationCard(mask: mask)), [1, 35, 0, 0xfd, 0x02, 0, 0])
+        XCTAssertEqual([UInt8](Commands.carouselNavigationCard(mask: mask, distance: 120, angle: -45, text: "Go")),
+                       [1, 35, 0, 0xfd, 0x02, 0, 0, 0, 0, 0, 120, 0xff, 0xd3, 0, 0, 220, 0x47, 0x6f, 0])
+        // 29 characters + NUL after the header: 46 bytes, within the 80 the firmware takes.
+        let long = [UInt8](Commands.carouselNavigationCard(mask: mask, distance: 0, text: String(repeating: "x", count: 60)))
+        XCTAssertEqual(long.count, 16 + 30)
+        XCTAssertEqual(long.last, 0)
+    }
+
     func testCallAlertLayouts() {
         // Icon type 0, repeat 60 (about 30 s), text + NUL.
         XCTAssertEqual([UInt8](Commands.incomingCall(text: "Llamada")),

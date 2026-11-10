@@ -387,7 +387,7 @@ public enum Commands {
             bytes += metric4(distance, metric: metric)
             bytes += angle16(angle)
             bytes += [0, 0, 220]
-            bytes += navText(text, header: 9)
+            bytes += navText(text, header: 16)
         }
         return Data(bytes)
     }
