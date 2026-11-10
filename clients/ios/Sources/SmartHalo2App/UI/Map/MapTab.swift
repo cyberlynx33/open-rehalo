@@ -88,6 +88,9 @@ struct MapTab: View {
 
     /// A route or destination is in play (destinations win, as on the map).
     private var hasContext: Bool { destination != nil || selection.route != nil }
+    /// Location denied and no simulated rider: nothing could be navigated, so the actions stay off
+    /// and the `.locationOff` notice says why.
+    private var locationBlocked: Bool { guidance.locationDenied && !connection.isDemo }
     private var contextKey: String? {
         destination.map { "destination \($0.id)" } ?? selection.route.map { "route \($0.id)" }
     }
@@ -384,6 +387,7 @@ struct MapTab: View {
                              onNavigate: { destination != nil ? navigateToDestination() : startNavigation() },
                              onCompass: compassToDestination,
                              onSave: saveDestination)
+                    .disabled(locationBlocked)
                     .transition(.opacity)
             }
         }
@@ -523,6 +527,9 @@ struct MapTab: View {
     /// on my own).
     private func startNavigation() {
         guard let route = selection.route else { return }
+        // Also reached from Route detail's NAVIGATE: without Location the ride would only ever say
+        // "Waiting for GPS…", so show the notice instead of starting.
+        guard !locationBlocked else { setChromeHidden(false); return }
         library.markUsed(id: route.id)
         importError = nil
         if !connection.isDemo, let here = currentCoordinate, let start = route.points.first {

@@ -94,6 +94,12 @@ struct NavigatingView: View {
         if o != .free { settings.navOrientation = o }
     }
 
+    private func openSystemSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+
     // MARK: Top: turn banner + notices + compass
 
     private var topArea: some View {
@@ -109,6 +115,13 @@ struct NavigatingView: View {
             if guidance.haloLost {
                 NoticeBanner(systemImage: "antenna.radiowaves.left.and.right.slash",
                              text: "Halo disconnected. Guidance continues on the phone.")
+            }
+            if guidance.locationDenied && !guidance.simulated {
+                // Permission withdrawn mid-ride (or the ride was started without it): no fix will
+                // ever come, so say so instead of "Waiting for GPS…" for good.
+                NoticeBanner(systemImage: "location.slash",
+                             text: "Location is off. Enable it in Settings to navigate.",
+                             actionTitle: "Open Settings", action: openSystemSettings)
             }
             if guidance.wrongWay {
                 WrongWayBanner(canInvert: guidance.canInvert,
@@ -428,16 +441,24 @@ struct RouteProgressBar: View {
     }
 }
 
-/// Non-blocking warning strip (e.g. Halo dropped mid-ride).
+/// Non-blocking warning strip (e.g. Halo dropped mid-ride), with an optional trailing action.
 struct NoticeBanner: View {
     let systemImage: String
     let text: LocalizedStringKey
+    var actionTitle: LocalizedStringKey? = nil
+    var action: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
             Image(systemName: systemImage).font(.subheadline.weight(.semibold))
             Text(text).font(.subheadline.weight(.semibold))
             Spacer(minLength: 0)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Theme.text)
+                    .frame(minHeight: Theme.minTarget)
+            }
         }
         .foregroundStyle(Theme.warn)
         .padding(.horizontal, Theme.Space.l)
@@ -448,7 +469,8 @@ struct NoticeBanner: View {
             RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
                 .strokeBorder(Theme.warn.opacity(0.6), lineWidth: 1)
         )
-        .accessibilityElement(children: .combine)
+        // With a button inside, the parts stay separate elements so VoiceOver can reach it.
+        .accessibilityElement(children: action == nil ? .combine : .contain)
     }
 }
 
