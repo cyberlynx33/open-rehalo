@@ -57,4 +57,21 @@ final class DemoSessionTests: XCTestCase {
         let light = try await session.transceive(Commands.frontLight(on: true), crypted: false)
         XCTAssertEqual([UInt8](light).first, ReturnCode.ok.rawValue)
     }
+
+    /// The firmware reads the command byte even when it isn't there: `[4]` would run `{4,0}`
+    /// (enter bootloader). Such a request never leaves the phone.
+    func testARequestShorterThanTwoBytesIsRefused() async throws {
+        let session = Session(transport: TinyMock())
+        try await session.open()
+        await session.authenticateForDemo()
+        do {
+            _ = try await session.transceive(Data([4]), crypted: false)
+            XCTFail("a 1-byte request must be refused")
+        } catch Session.SessionError.requestTooShort(let count) {
+            XCTAssertEqual(count, 1)
+        }
+        // The session is still usable afterwards.
+        let light = try await session.transceive(Commands.frontLight(on: true), crypted: false)
+        XCTAssertEqual([UInt8](light).first, ReturnCode.ok.rawValue)
+    }
 }

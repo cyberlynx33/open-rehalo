@@ -19,6 +19,9 @@ public actor Session {
         /// The BLE link dropped while a command was in flight (common right after `resetPassword`,
         /// which un-pairs the device and may reset the connection).
         case disconnected
+        /// A request shorter than `[service, command]`. The firmware reads the command byte anyway:
+        /// a lone `[4]` reaches the STM32 as `{4,0}` and sends the nRF into its bootloader.
+        case requestTooShort(Int)
     }
 
     /// Per round-trip reply timeout. A healthy device answers in well under a second; 8s leaves
@@ -173,6 +176,7 @@ public actor Session {
     @discardableResult
     public func transceive(_ appData: Data, crypted: Bool? = nil, label: String = "") async throws -> Data {
         if pending != nil { throw SessionError.transceiveInProgress }
+        guard appData.count >= 2 else { throw SessionError.requestTooShort(appData.count) }
         let useCipher = (crypted ?? (cipher != nil)) ? cipher : nil
         let encoded = try Frame.encodeMessage(appData, cipher: useCipher)
         let tag = label.isEmpty ? "cmd \(SH2Log.hex(appData, max: 4))" : label
