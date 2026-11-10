@@ -843,7 +843,10 @@ final class DeviceController: ObservableObject {
             SH2Log.log("nav queue: dropped a stale batch (\(dropped.labels))")
         }
         if navWorker == nil {
-            navWorker = Task { @MainActor [weak self] in await self?.drainNav() }
+            navWorker = Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.drainNav()
+            }
         }
     }
 
