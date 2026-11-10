@@ -381,10 +381,11 @@ final class DeviceController: ObservableObject {
         catch { statusMessage = String(localized: "clock failed: \(describe(error))") }
     }
 
+    /// The ring's speedometer is its Speed card: jump there, and the ring asks for the speed (the
+    /// ride's, or the snail when still). `{1,18}` on its own only feeds that card and draws nothing.
     func showSpeedometerDemo() async {
-        guard let session = readySession else { return }
-        do { _ = try await session.transceive(Commands.showSpeedometer(percentage: 60, speed: 24), label: "speedometer") }
-        catch { statusMessage = String(localized: "speedometer failed: \(describe(error))") }
+        guard readySession != nil else { return }
+        showCard(.speed)
     }
 
     func showCharge() async {
@@ -417,17 +418,13 @@ final class DeviceController: ObservableObject {
         try? await Task.sleep(for: .seconds(2))
         await run(Commands.alarmDemo(.off), "alarmDemo")
     }
-    func showCompass(heading: UInt16) async { await run(Commands.compass(heading: heading), "compass") }
-    func compassOff() async          { await run(Commands.compassOff(), "compassOff") }
+    // Heartbeat {1,9}, compass {1,11}, compass calibration {4,3} and the fitness intro {1,27} have
+    // no working handler in the SmartHalo 2's firmware and are not offered.
     func showProgress(_ pct: UInt8) async   { await run(Commands.progress(percentage: pct), "progress") }
     func progressOff() async         { await run(Commands.progressOff(), "progressOff") }
-    func showHeartbeat() async       { await run(Commands.heartbeat(), "heartbeat") }
-    func heartbeatOff() async        { await run(Commands.heartbeatOff(), "heartbeatOff") }
     func showLowBattery() async      { await run(Commands.lowBattery(), "lowBattery") }
     func clockOff() async            { await run(Commands.clockOff(), "clockOff") }
-    func speedometerOff() async      { await run(Commands.speedometerOff(), "speedometerOff") }
     func showSpeedometerIntro() async { await run(Commands.speedometerIntro(), "speedometerIntro") }
-    func showFitnessIntro() async    { await run(Commands.fitnessIntro(), "fitnessIntro") }
     func setFrontExternal(on: Bool) async { await run(Commands.frontExternalToggle(on: on), "frontExternal") }
     func carouselGoto(_ i: UInt8) async { await run(Commands.carouselPosition(i), "carouselPosition") }
 
@@ -873,7 +870,6 @@ final class DeviceController: ObservableObject {
         updateBattery(level: state.stateOfCharge, charging: state.charging,
                       plugged: state.plugged ?? state.charging, temperature: state.temperature)
     }
-    func calibrateCompass() async { await run(Commands.compassCalibrate(), "compassCalibrate") }
     func syncTime() async {
         let secs = UInt64(max(0, Date().timeIntervalSince1970))
         let lang = Locale.current.language.languageCode?.identifier ?? "en"

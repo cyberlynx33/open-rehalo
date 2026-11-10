@@ -6,14 +6,12 @@ import SH2Protocol
 struct DisplayView: View {
     @ObservedObject var controller: DeviceController
 
-    @State private var heading: Double = 0     // 0…359°
     @State private var progress: Double = 50    // 0…100 %
     @State private var frontExternal = false
 
     var body: some View {
         List {
             widgetsSection
-            compassSection
             progressSection
             introsSection
             frontLightSection
@@ -27,31 +25,19 @@ struct DisplayView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    // Heartbeat {1,9}, compass {1,11} and the fitness intro {1,27} are gone from here: the SmartHalo
+    // 2's firmware has no handler for the first two (it answers UNIMPLEMENTED) and draws the third
+    // from an empty payload.
     private var widgetsSection: some View {
         Section("Widgets") {
             actionRow("Clock", "clock") { await controller.showClockNow() }
             actionRow("Clock off", "clock.badge.xmark") { await controller.clockOff() }
+            // The ring's speedometer is its Speed card: `{1,18}` alone draws nothing.
             actionRow("Speedometer", "speedometer") { await controller.showSpeedometerDemo() }
-            actionRow("Speedometer off", "gauge.with.dots.needle.0percent") { await controller.speedometerOff() }
             actionRow("Battery", "battery.100") { await controller.showCharge() }
-            actionRow("Heartbeat", "heart") { await controller.showHeartbeat() }
-            actionRow("Heartbeat off", "heart.slash") { await controller.heartbeatOff() }
             actionRow("Logo", "seal") { await controller.showLogo() }
             actionRow("Low-battery warning", "battery.25") { await controller.showLowBattery() }
-            actionRow("Demo", "wand.and.stars") { await controller.showDemo() }
-        }
-    }
-
-    private var compassSection: some View {
-        Section("Compass") {
-            VStack(alignment: .leading) {
-                Text("Heading: \(Int(heading))°")
-                Slider(value: $heading, in: 0...359, step: 1)
-            }
-            actionRow("Point to heading", "location.north.line") {
-                await controller.showCompass(heading: UInt16(heading))
-            }
-            actionRow("Compass off", "location.slash") { await controller.compassOff() }
+            actionRow("Alarm demo", "bell.badge") { await controller.showDemo() }
         }
     }
 
@@ -69,7 +55,6 @@ struct DisplayView: View {
     private var introsSection: some View {
         Section("Intro animations") {
             actionRow("Speedometer intro", "play.circle") { await controller.showSpeedometerIntro() }
-            actionRow("Fitness intro", "figure.run") { await controller.showFitnessIntro() }
         }
     }
 

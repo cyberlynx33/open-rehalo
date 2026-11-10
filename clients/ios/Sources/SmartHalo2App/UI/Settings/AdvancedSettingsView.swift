@@ -138,16 +138,10 @@ private struct ObservedAdvancedList: View {
             } label: {
                 Label("Sync clock & language", systemImage: "clock.arrow.2.circlepath")
             }
-            Button {
-                guard let controller else { return }
-                Task { await controller.calibrateCompass() }
-            } label: {
-                Label("Calibrate compass", systemImage: "safari")
-            }
+            // No "Calibrate compass": the SmartHalo 2's firmware has no handler for {4,3} (it
+            // answers UNIMPLEMENTED) and nothing reads its magnetometer over Bluetooth.
         } header: {
             Text("Maintenance")
-        } footer: {
-            Text("Compass calibration: after tapping, turn the Halo slowly in a figure of eight.")
         }
         .disabled(!isReady)
         .listRowBackground(Theme.surface)
