@@ -163,6 +163,36 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(director.guidance?.hasReachedOrigin, true)
     }
 
+    /// Fixes every 5 m from `a` to `b` (north, east), `b` included and `a` left out.
+    func leg(_ a: (Double, Double), _ b: (Double, Double)) -> [NavLocation] {
+        let n = max(1, Int((hypot(b.0 - a.0, b.1 - a.1) / 5).rounded()))
+        return (1...n).map {
+            let t = Double($0) / Double(n)
+            return point(north: a.0 + (b.0 - a.0) * t, east: a.1 + (b.1 - a.1) * t)
+        }
+    }
+
+    /// Back to a corner from the north-north-west after a detour: the first fix east of the route's
+    /// line puts the nearest point on the next stretch, within 5 m of the corner. One step on, not
+    /// two (the second skipped the stretch and left the rider "off route" while riding it).
+    func testReturningToACornerMovesOneStepOn() {
+        var route: [NavLocation] = (0...20).map { point(north: Double($0) * 10, east: 0, accuracy: 0) }
+        route += (1...20).map { point(north: 200, east: Double($0) * 10, accuracy: 0) }
+        route += (1...20).map { point(north: 200 + Double($0) * 10, east: 200, accuracy: 0) }
+        route += (1...20).map { point(north: 400, east: 200 + Double($0) * 10, accuracy: 0) }
+        var director = NavDirector(points: route, title: "Office")
+        XCTAssertEqual(director.steps.count, 5)
+        _ = director.start(ringConnected: true)
+        let ride = leg((0, 0), (100, 0)) + leg((100, 0), (100, -60)) + leg((100, -60), (300, -60))
+            + leg((300, -60), (300, -30)) + leg((300, -30), (195, 10))
+        var steps: [Int] = []
+        for fix in ride {
+            _ = director.update(fix)
+            if let i = director.guidance?.currentStepIndex, i != steps.last { steps.append(i) }
+        }
+        XCTAssertEqual(steps, [0, 1])
+    }
+
     // MARK: - Routed destinations (not in the official app)
 
     /// A routed destination's instruction near the corner replaces "Turn right" on the OLED.

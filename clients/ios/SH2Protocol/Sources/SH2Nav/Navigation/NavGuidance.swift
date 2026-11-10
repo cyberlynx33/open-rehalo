@@ -439,6 +439,10 @@ public struct NavGuidance: Sendable {
                                         _ match: NavMatch? = nil) {
         if match?.status == .rejoining { return }
         let target = match?.target ?? closestLocationOnNearbyPath(loc, cur, next)
+        // `closestLocationOnNearbyPath` moves to the next step when its path is nearer: the manoeuvre
+        // ahead is then that step's. Kept stale, the arcs aimed at the vertex just passed and the
+        // "< 5 m from its entrance" rule below moved the step a second time, skipping a stretch.
+        if currentStepIndex + 1 < steps.count { next = steps[currentStepIndex + 1] }
         guard target.exists else { return }
         let d = loc.distance(to: target)
         display.distanceToThisManeuver = NavMath.trunc(d.rounded())
