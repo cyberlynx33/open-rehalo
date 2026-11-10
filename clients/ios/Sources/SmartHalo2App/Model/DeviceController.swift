@@ -239,9 +239,11 @@ final class DeviceController: ObservableObject {
                 if password != saved { newlyGeneratedPassword = password }
                 await finishReady()
             } catch let e as Session.SessionError {
-                // Empty-password authenticate rejected → the ring still holds its old password in
-                // RAM → it must reboot. Everything else is a genuine error.
-                if case .commandFailed(let step, _) = e, step == "authenticate" {
+                // Empty-password authenticate answered RET_FAIL → the ring still holds its old
+                // password in RAM → it must reboot. Anything else (an empty reply, DENIED, a link
+                // error) says nothing about the password and is a genuine error: "Try again".
+                if case .commandFailed(let step, let code) = e, step == "authenticate",
+                   code == ReturnCode.fail.rawValue {
                     statusMessage = "Un-paired ✓ — the ring must reboot once to finish."
                     phase = .needsReboot
                 } else {
