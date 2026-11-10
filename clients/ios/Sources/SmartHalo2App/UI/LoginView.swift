@@ -44,6 +44,10 @@ struct LoginView: View {
                 if !serverURL.isEmpty && !urlValid {
                     Text("Enter a valid http(s) URL or host:port").font(.caption).foregroundStyle(Theme.danger)
                 }
+                if AppSettings.normalize(serverURL)?.scheme == "http" {
+                    Text("This server uses plain HTTP: your password and session travel unencrypted. Use it only on your own network.")
+                        .font(.caption).foregroundStyle(Theme.warn)
+                }
             }
 
             Section {
