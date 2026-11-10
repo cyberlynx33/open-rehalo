@@ -9,6 +9,9 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     var onAuth: ((CLAuthorizationStatus) -> Void)?
 
     private let manager = CLLocationManager()
+    /// The newest fix delivered: a batch that arrives late (deferred updates, or two batches whose
+    /// tasks ran out of order) must not take the ride back in time.
+    private var lastTimestamp: Date?
 
     override init() {
         super.init()
@@ -45,6 +48,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     /// When-In-Use is enough — iOS shows the blue location indicator).
     func start(background: Bool = false) {
         requestAuthorization()
+        lastTimestamp = nil
         if background {
             manager.allowsBackgroundLocationUpdates = true
             manager.pausesLocationUpdatesAutomatically = false
@@ -60,8 +64,18 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let loc = locations.last else { return }
-        Task { @MainActor in self.onLocation?(loc) }
+        guard !locations.isEmpty else { return }
+        // Every fix of the batch, in order: a batch holds several after a pause (deferred updates),
+        // and the ride logic reads each one at 1 Hz, so only the last would lose the ones before.
+        Task { @MainActor in self.deliver(locations) }
+    }
+
+    private func deliver(_ locations: [CLLocation]) {
+        for loc in locations {
+            if let last = lastTimestamp, loc.timestamp <= last { continue }
+            lastTimestamp = loc.timestamp
+            onLocation?(loc)
+        }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
