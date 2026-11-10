@@ -72,6 +72,14 @@ struct SettingsView: View {
         } message: {
             Text("You'll be logged out and taken back to the welcome screen.")
         }
+        // On the Form, not on a Section: presentations attached to list sections are unreliable.
+        .sheet(isPresented: $showTapCode) {
+            TapCodeSheet(controller: isReady ? controller : nil)
+            .presentationBackground(Theme.surface2)
+            .environmentObject(settings)
+            .environmentObject(connection)
+            .haloTheme()
+        }
     }
 
     // MARK: My Halo
@@ -146,13 +154,6 @@ struct SettingsView: View {
             }
         }
         .listRowBackground(Theme.surface)
-        .sheet(isPresented: $showTapCode) {
-            TapCodeSheet(controller: isReady ? controller : nil)
-            .presentationBackground(Theme.surface2)
-            .environmentObject(settings)
-            .environmentObject(connection)
-            .haloTheme()
-        }
     }
 
     // MARK: Alerts

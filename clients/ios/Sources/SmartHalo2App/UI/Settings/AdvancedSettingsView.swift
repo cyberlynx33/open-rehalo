@@ -93,6 +93,10 @@ private struct ObservedAdvancedList: View {
         } message: {
             Text("Removes this phone's stored device password. You'll need to recover/re-pair to control the ring again.")
         }
+        // On the List, not on a Section: presentations attached to list sections are unreliable.
+        .sheet(isPresented: $showPasswordEntry) {
+            if let controller { passwordEntrySheet(controller) }
+        }
         .task {
             lastRide = RideRecorder.rides.first
             guard let controller, isReady else { return }
@@ -304,7 +308,6 @@ private struct ObservedAdvancedList: View {
                 Text("The ring only accepts the password this app set during recovery. Save a copy in your password manager: if it's lost, recovering again needs a cold reboot of the ring. iCloud Keychain sync needs iCloud Keychain turned on, and may not work with free-account (SideStore) signing. Another iPhone tries synced passwords automatically.")
             }
             .listRowBackground(Theme.surface)
-            .sheet(isPresented: $showPasswordEntry) { passwordEntrySheet(controller) }
         }
     }
 
