@@ -290,6 +290,7 @@ final class DeviceController: ObservableObject {
         await applyRingCards()
         // The ring keeps the light's mode in RAM only: give it back what the rider chose.
         if lightSettingsApplied { await applyLightSettings(silently: true) }
+        await applyTouchSounds()
     }
 
     func close() {
@@ -793,6 +794,14 @@ final class DeviceController: ObservableObject {
     func playSound() async        { await run(Commands.soundPlay(), "soundPlay") }
     func stopSound() async        { await run(Commands.soundStop(), "soundStop") }
     func setTouchSounds(on: Bool) async { await run(Commands.soundTouch(on: on), "touchSounds") }
+
+    /// Settings › Advanced › Sound & touch keeps the rider's choice under this key; the ring isn't
+    /// asked and may have rebooted since, so it is sent again on every connection.
+    static let touchSoundsKey = "sh2.touchSounds"
+    private func applyTouchSounds() async {
+        let on = UserDefaults.standard.object(forKey: Self.touchSoundsKey) as? Bool ?? true
+        await setTouchSounds(on: on)
+    }
     func runTouchOnboarding() async { await run(Commands.touchOnboarding(), "touchOnboarding") }
 
     // Navigation — driven by GuidanceController (`NavDirector`, reimplementation of the official app).
