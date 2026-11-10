@@ -2767,7 +2767,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Desnivel"
+            "value" : "Altitud"
           }
         }
       }
@@ -8905,6 +8905,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importando la ruta…"
+          }
+        }
+      }
+    },
+    "Elevation gain" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elevation gain"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desnivel"
           }
         }
       }

@@ -16,7 +16,7 @@ struct RideDetailView: View {
                 stat("Distance", ride.distance.map { fmt.distance($0) })
                 stat("Duration", ride.duration.map { RideClock.string($0) })
                 stat("Avg speed", ride.averageSpeed.map { fmt.speed($0 / 3.6) })
-                stat("Elevation", ride.elevation.map { fmt.elevation($0) })
+                stat("Elevation gain", ride.elevation.map { fmt.elevation($0) })
                 stat("Calories", ride.calories.map { Self.whole($0, UnitEnergy.kilocalories) })
                 stat("CO₂ saved", ride.co2.map { Self.whole($0, UnitMass.grams) })
             }
