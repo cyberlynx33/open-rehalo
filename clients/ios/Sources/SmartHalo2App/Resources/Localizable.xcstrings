@@ -222,23 +222,6 @@
         }
       }
     },
-    "Alerts only arrive while this iPhone is connected to the Halo (in range, with the app running in the background)." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alerts only arrive while this iPhone is connected to the Halo (in range, with the app running in the background)."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El aviso solo llega mientras este iPhone está conectado al Halo (al alcance y con la app en segundo plano)."
-          }
-        }
-      }
-    },
     "Allow" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -290,23 +273,6 @@
         }
       }
     },
-    "Armed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Armed"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Armada"
-          }
-        }
-      }
-    },
     "Arms as soon as you leave your bike" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -337,23 +303,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arma o desarma la alarma en el Halo, sin el iPhone"
-          }
-        }
-      }
-    },
-    "Arms the alarm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Arms the alarm"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Arma la alarma"
           }
         }
       }
@@ -439,23 +388,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Batería al %lld %% — carga pronto el Halo"
-          }
-        }
-      }
-    },
-    "Battery on ring" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Battery on ring"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Batería en el anillo"
           }
         }
       }
@@ -1242,23 +1174,6 @@
         }
       }
     },
-    "Recent" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recientes"
-          }
-        }
-      }
-    },
     "Recent destinations" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1752,23 +1667,6 @@
         }
       }
     },
-    "Brightness %@ · %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Brightness %@ · %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Brillo %@ · %@"
-          }
-        }
-      }
-    },
     "Calibrate compass" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1867,23 +1765,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cambia la métrica"
-          }
-        }
-      }
-    },
-    "Choose a route" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose a route"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige una ruta"
           }
         }
       }
@@ -2483,23 +2364,6 @@
         }
       }
     },
-    "Demo: try the alarm alert in Settings › Advanced › Simulate alarm." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: try the alarm alert in Settings › Advanced › Simulate alarm."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: prueba el aviso de alarma en Ajustes › Avanzado › Simular alarma."
-          }
-        }
-      }
-    },
     "descent" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2564,23 +2428,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Desarmada"
-          }
-        }
-      }
-    },
-    "Disarms the alarm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Disarms the alarm"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Desarma la alarma"
           }
         }
       }
@@ -3299,23 +3146,6 @@
         }
       }
     },
-    "High" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "High"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alta"
-          }
-        }
-      }
-    },
     "I've rebooted it" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3329,23 +3159,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ya lo he reiniciado"
-          }
-        }
-      }
-    },
-    "Import a GPX from Wikiloc, Komoot or Files, or pick one from your routes." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import a GPX from Wikiloc, Komoot or Files, or pick one from your routes."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Importa un GPX desde Wikiloc, Komoot o Archivos, o elige una de tus rutas."
           }
         }
       }
@@ -3537,23 +3350,6 @@
         }
       }
     },
-    "Light brightness & mode" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Light brightness & mode"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Brillo y modo de la luz"
-          }
-        }
-      }
-    },
     "Live log" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3618,23 +3414,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cerrar sesión"
-          }
-        }
-      }
-    },
-    "Low" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Low"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Baja"
           }
         }
       }
@@ -3720,23 +3499,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mapa de la ruta"
-          }
-        }
-      }
-    },
-    "Medium" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Medium"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Media"
           }
         }
       }
@@ -5254,23 +5016,6 @@
         }
       }
     },
-    "Search my routes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search my routes"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buscar en mis rutas"
-          }
-        }
-      }
-    },
     "Section" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5284,23 +5029,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sección"
-          }
-        }
-      }
-    },
-    "Selected route" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selected route"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ruta seleccionada"
           }
         }
       }
@@ -5560,23 +5288,6 @@
         }
       }
     },
-    "Show battery on the ring" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show battery on the ring"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ver batería en el anillo"
-          }
-        }
-      }
-    },
     "Show on map" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5811,23 +5522,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GPS simulado"
-          }
-        }
-      }
-    },
-    "Since %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Since %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Desde las %@"
           }
         }
       }
@@ -6359,23 +6053,6 @@
         }
       }
     },
-    "Tap to disarm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap to disarm"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toca para desarmar"
-          }
-        }
-      }
-    },
     "Taps" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6440,23 +6117,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El Halo ya está desemparejado. Por una peculiaridad del firmware conserva la contraseña antigua hasta que se reinicia una vez: desconecta y vuelve a conectar la batería, o deja que se agote. Espera aquí: detectaremos cuándo vuelve."
-          }
-        }
-      }
-    },
-    "The ring lights up with its charge level" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The ring lights up with its charge level"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El anillo se ilumina con su nivel de carga"
           }
         }
       }
@@ -7443,23 +7103,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Estás a %@ del inicio"
-          }
-        }
-      }
-    },
-    "Your bike moved · %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your bike moved · %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu bici se ha movido · %@"
           }
         }
       }
