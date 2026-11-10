@@ -187,17 +187,37 @@ final class AppSettings: ObservableObject {
     /// Re-show onboarding (used from Settings to switch modes).
     func resetOnboarding() { hasCompletedOnboarding = false }
 
-    /// Accept "host:port", "http://host:port", trailing slashes, etc. Defaults to http:// for a
-    /// bare host (self-hosted servers are usually plain-HTTP on the LAN).
+    /// Accept "host:port", "http://host:port", trailing slashes, etc. A bare host gets `https://`,
+    /// except on the local network (`localhost`, `.local`, private IPv4 ranges), where a self-hosted
+    /// server is usually plain HTTP; a scheme typed out is always kept.
     static func normalize(_ raw: String) -> URL? {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
-        if !s.contains("://") { s = "http://" + s }
+        if !s.contains("://") {
+            let host = s.split(whereSeparator: { $0 == ":" || $0 == "/" }).first.map(String.init) ?? s
+            s = (isLocalHost(host) ? "http://" : "https://") + s
+        }
         while s.hasSuffix("/") { s.removeLast() }
         guard let url = URL(string: s), url.scheme == "http" || url.scheme == "https", url.host != nil
         else { return nil }
         return url
     }
+
+    /// Hosts reached without TLS by default: the LAN, where a self-hosted `sh2-server` lives.
+    static func isLocalHost(_ host: String) -> Bool {
+        let h = host.lowercased()
+        if h == "localhost" || h.hasSuffix(".local") || h.hasSuffix(".lan") || h.hasSuffix(".home")
+            || h.hasSuffix(".internal") { return true }
+        let parts = h.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4 else { return false }
+        return parts[0] == 10 || parts[0] == 127
+            || (parts[0] == 192 && parts[1] == 168)
+            || (parts[0] == 172 && (16...31).contains(parts[1]))
+            || (parts[0] == 169 && parts[1] == 254)
+    }
+
+    /// The server is reached over plain HTTP: credentials and tokens travel in clear.
+    var serverIsPlainHTTP: Bool { serverURL?.scheme == "http" }
 }
 
 /// What the first (tappable) metric of the Navigating panel shows.
