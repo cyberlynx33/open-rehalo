@@ -183,6 +183,25 @@ public struct NavGuidance: Sendable {
         self.stepAlong = stepAlong.count == steps.count ? stepAlong : nil
     }
 
+    /// Addition (matched engine): the rider is already on the route, `along` metres in, at `loc`: the
+    /// route was inverted under them (docs/MAP_MATCHING_SPEC.md §9.3). The step is the one there and
+    /// the origin is reached, so the first fix draws the turn ahead, not the route's first one.
+    public mutating func placeOnRoute(at along: Double, from loc: NavLocation) {
+        guard let stepAlong, steps.count >= 2 else { return }
+        var k = 0
+        for i in 0..<steps.count where stepAlong[i] <= along { k = i }
+        currentStepIndex = min(k, steps.count - 2)
+        hasReachedOrigin = true
+        offThePath = false
+        offlineStatus = .onPath
+        offPathDestination = .none
+        display.thisTurn.stepType = NavStepType.standard
+        let next = steps[currentStepIndex + 1]
+        let remaining = ClosestPathLocation(loc, steps[currentStepIndex].path).distanceRemaining
+        let short = next.type == NavStepType.destination ? 50.0 : 25.0
+        display.distanceToThisManeuver = NavMath.trunc(max(remaining - short, 0))
+    }
+
     /// Addition (matched engine): one fix with what the matcher made of it. A fix the matcher ignored
     /// (`.hold`) only feeds the bearing: the ring keeps what it shows.
     public mutating func update(_ fix: NavLocation, match: NavMatch) {

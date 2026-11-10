@@ -644,6 +644,35 @@ final class MatchedEngineTests: XCTestCase {
         XCTAssertFalse(labels.contains("navPointer"))       // no "Return to route" flash
     }
 
+    /// "Invert route" places the guidance where the rider is (here the reversed route's last stretch),
+    /// not at the route's first turn with the step sync catching up a few fixes later.
+    func testInvertingPlacesTheGuidanceAtTheRidersStep() {
+        // North 300, east 300, north 1200. The rider rides 250 m up the first stretch, turns back and
+        // rides it the wrong way; inverted, that stretch is the last one before the destination.
+        let route = RideSim.route([(0, 0), (0, 300), (300, 300), (300, 1500)])
+        var sim = RideSim(seed: 11, sigma: 5)
+        var e = engine(route)
+        for (fix, _) in sim.ride(route, to: 250, speed: 5) { _ = e.update(fix) }
+        var at = 250.0
+        for (fix, truth) in sim.ride(route, from: 250, to: 50, speed: 5) where e.snapshot.wrongWay != true {
+            _ = e.update(fix)
+            at = truth
+        }
+        XCTAssertEqual(e.snapshot.wrongWay, true)
+        e = try! XCTUnwrap(e.inverted()).engine
+        let last = (e.director?.steps.count ?? 0) - 2
+        XCTAssertEqual(e.director?.guidance?.currentStepIndex, last)
+        XCTAssertEqual(e.snapshot.nextTurn, .arrival)
+        XCTAssertGreaterThan(e.snapshot.nextTurnDistance, 50)
+        var labels: [String] = []
+        for (fix, _) in sim.ride(route, from: at - 5, to: at - 25, speed: 5) {
+            labels += e.update(fix).commands.map(\.label)
+            XCTAssertEqual(e.director?.guidance?.currentStepIndex, last)
+            XCTAssertFalse(e.snapshot.offRoute)
+        }
+        XCTAssertFalse(labels.contains("navPointer"))
+    }
+
     func testRoutedDestinationCannotBeInverted() {
         let route = RideSim.route([(0, 0), (0, 1500)])
         let e = RideEngine(route: route, title: "Test", settings: .init(),

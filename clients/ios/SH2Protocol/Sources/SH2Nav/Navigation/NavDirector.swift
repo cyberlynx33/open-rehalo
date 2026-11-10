@@ -256,7 +256,21 @@ public struct NavDirector: Sendable {
     public func continuing(on points: [NavLocation]) -> NavDirector {
         var d = NavDirector(points: points, title: title, settings: settings)
         d.carouselOnNavigation = carouselOnNavigation
+        d.currentLocation = currentLocation
         return d
+    }
+
+    /// Addition (matched engine): the ride carries on `along` metres into this director's route, the
+    /// rider at `fix` (an inverted route, §9.3). The guidance starts there, on the route: built at the
+    /// first fix instead, it would start at step 0 and the step sync would take a few fixes to catch up.
+    public mutating func placeOnRoute(at along: Double, from fix: NavLocation) {
+        guard guidance == nil, let stepAlong else { return }
+        var g = NavGuidance(start: fix, steps: steps)
+        g.isNavigating = true
+        g.enableMatching(stepAlong: stepAlong)
+        g.placeOnRoute(at: along, from: fix)
+        guidance = g
+        currentLocation = fix
     }
 
     /// The ring switched to its Navigation card: answer with the card's content.
