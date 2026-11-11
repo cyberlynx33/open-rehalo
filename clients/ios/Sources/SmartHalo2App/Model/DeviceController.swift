@@ -116,6 +116,10 @@ final class DeviceController: ObservableObject {
             } catch BluetoothCentral.CentralError.superseded {
                 return                      // a newer start() owns the phase now
             } catch BluetoothCentral.CentralError.cancelled {
+                // close() cancelled it: a restart() owns the phase (its start() follows), and a
+                // plain disconnect sets its own. Flipping to .disconnected here would make
+                // HaloConnection schedule a reconnect on top of the restart's.
+                guard generation == linkGeneration else { return }
                 phase = .disconnected
                 statusMessage = ""
                 return
