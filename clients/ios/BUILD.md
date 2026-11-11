@@ -11,9 +11,13 @@ The workflow in `.github/workflows/ios.yml` runs on every push that touches `cli
 - packages the archive as an **unsigned `.ipa`** (`rehalo-unsigned.ipa`) and uploads it as the
   `rehalo-unsigned-ipa` artifact.
 
-Download the artifact from the **iOS build** run in the **Actions** tab. An unsigned `.ipa` has to be
-signed with your own Apple ID before it installs on an iPhone; see the main README. CI needs no Apple
-account.
+Download the artifact from the **iOS build** run in the **Actions** tab (GitHub serves artifacts as a
+zip, and `gh run download <run-id> -n rehalo-unsigned-ipa` unpacks it for you). A push to `dev` also
+publishes the `.ipa` as the rolling **`dev-latest`** prerelease, with a direct link:
+`https://github.com/cyberlynx33/open-rehalo/releases/download/dev-latest/rehalo-unsigned.ipa`. A manual
+run of the workflow can publish any branch there with its *publish_dev_latest* option. An unsigned
+`.ipa` has to be signed with your own Apple ID before it installs on an iPhone; see the main README. CI
+needs no Apple account.
 
 ## 2. Your own Mac — the simplest if you have macOS
 ```

@@ -2,6 +2,8 @@
 # Produces an UNSIGNED .ipa artifact, ready to sideload with SideStore or iLoader
 # (they re-sign it with your Apple ID on install).
 # A `v*` tag also publishes a GitHub Release with that .ipa and the notes in docs/releases/<tag>.md.
+# A push to `dev` also replaces the .ipa of the rolling `dev-latest` prerelease, which gives the newest
+# development build one stable download link (workflow artifacts are only served zipped).
 name: iOS build
 
 on:
@@ -11,9 +13,14 @@ on:
     paths: ['clients/ios/**', '.github/workflows/ios.yml']
   pull_request:
     paths: ['clients/ios/**']
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      publish_dev_latest:
+        description: 'Also publish this build as the dev-latest prerelease'
+        type: boolean
+        default: false
 
-# The build job only reads the repo; the release job raises its own token to contents: write.
+# The build job only reads the repo; the release jobs raise their own token to contents: write.
 permissions:
   contents: read
 
@@ -102,3 +109,52 @@ jobs:
           gh release create "$GITHUB_REF_NAME" rehalo-unsigned.ipa \
             --title "rehalo ${GITHUB_REF_NAME#v}" \
             --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+
+  # Rolling prerelease: the `dev-latest` tag follows the last build of `dev`, and the .ipa under it is
+  # replaced in place, so <repo>/releases/download/dev-latest/rehalo-unsigned.ipa is always the newest
+  # development build. A manual run publishes any branch there with the publish_dev_latest input.
+  dev-latest:
+    needs: build
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/dev') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_dev_latest)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: ios-dev-latest      # two pushes in a row update the tag and the asset in turn
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the .ipa
+        uses: actions/download-artifact@v4
+        with:
+          name: rehalo-unsigned-ipa
+
+      - name: Move the dev-latest tag to this commit
+        run: |
+          git tag -f dev-latest "$GITHUB_SHA"
+          git push -f origin refs/tags/dev-latest
+
+      - name: Publish or update the dev-latest prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          subject=$(git log -1 --format=%s "$GITHUB_SHA")
+          {
+            echo "Unsigned development build of the iOS app, built from \`$GITHUB_REF_NAME\`. Every push to \`dev\` replaces it."
+            echo "Sideload it with SideStore or iLoader like a release, and expect rough edges: the numbered releases are the stable ones."
+            echo
+            echo "- Commit: $GITHUB_SHA ($subject)"
+            echo "- Built: $(date -u +'%Y-%m-%d %H:%M UTC'), [run $GITHUB_RUN_NUMBER]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+            echo
+            echo "Direct link: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/dev-latest/rehalo-unsigned.ipa"
+          } > notes.md
+          if gh release view dev-latest >/dev/null 2>&1; then
+            gh release edit dev-latest --prerelease --title "rehalo dev (latest build)" --notes-file notes.md
+          else
+            gh release create dev-latest --prerelease --title "rehalo dev (latest build)" --notes-file notes.md
+          fi
+          gh release upload dev-latest rehalo-unsigned.ipa --clobber

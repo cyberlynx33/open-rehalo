@@ -79,7 +79,9 @@ rehalo isn't on the App Store yet. The app is unsigned, and you sideload it with
 
 **Get the `.ipa`:** download `rehalo-unsigned.ipa` from the
 [latest release](https://github.com/cyberlynx33/open-rehalo/releases/latest), or build it yourself with
-`cd clients/ios && xcodegen generate` on a Mac.
+`cd clients/ios && xcodegen generate` on a Mac. The newest development build, rebuilt on every push to
+`dev`, is the [dev-latest](https://github.com/cyberlynx33/open-rehalo/releases/tag/dev-latest)
+prerelease.
 
 **Install it** with [iLoader](https://github.com/nab138/iloader) over USB, or with
 [SideStore](https://sidestore.io) for automatic 7-day re-signing. Then trust the certificate in
