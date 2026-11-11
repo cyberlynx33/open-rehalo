@@ -270,6 +270,10 @@ private struct PairStep: View {
     }
 
     private func startScanIfPossible() {
+        // Bluetooth starts on demand, and the pairing step is the demand: without this, a phone
+        // with no saved Halo would wait for `.poweredOn` forever. The `onChange` on `central.state`
+        // starts the scan once it reports in.
+        central.activate()
         if central.state == .poweredOn && !central.isScanning { central.startScan() }
     }
 

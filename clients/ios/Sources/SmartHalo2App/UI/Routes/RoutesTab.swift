@@ -39,14 +39,18 @@ struct RoutesTab: View {
                 .navigationTitle("Routes")
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
-                        Button { showImportSheet = true } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(Theme.onAccent)
-                                .frame(width: 32, height: 32)
-                                .background(Theme.accent, in: Circle())
+                        if library.isImporting {
+                            ProgressView()
+                        } else {
+                            Button { showImportSheet = true } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(Theme.onAccent)
+                                    .frame(width: 32, height: 32)
+                                    .background(Theme.accent, in: Circle())
+                            }
+                            .accessibilityLabel(Text("Import route"))
                         }
-                        .accessibilityLabel(Text("Import route"))
                     }
                 }
                 .navigationDestination(for: UUID.self) { id in
@@ -109,6 +113,7 @@ struct RoutesTab: View {
                     message: "Share a GPX from Wikiloc, Komoot or Strava, or pick one from Files.",
                     primary: .init("Import GPX", systemImage: "square.and.arrow.down") { showImporter = true },
                     secondary: .init("Use demo route", systemImage: "sparkles") { useDemo() })
+                if library.isImporting { importingRow.padding(Theme.Space.l) }
                 if let importError { errorText(importError).padding(Theme.Space.l) }
             }
         } else {
@@ -120,6 +125,9 @@ struct RoutesTab: View {
         List {
             segment
                 .plainRow(top: Theme.Space.s, bottom: Theme.Space.s)
+            if library.isImporting {
+                importingRow.plainRow()
+            }
             if let importError {
                 errorText(importError).plainRow()
             }
@@ -211,6 +219,16 @@ struct RoutesTab: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// While a GPX is being read and parsed (off the main thread, see `RouteLibrary`).
+    private var importingRow: some View {
+        HStack(spacing: Theme.Space.s) {
+            ProgressView().controlSize(.small)
+            Text("Importing the route…").font(.footnote).foregroundStyle(Theme.textDim)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: - Actions
 
     private func askRename(_ saved: SavedRoute) {
@@ -225,30 +243,32 @@ struct RoutesTab: View {
     }
 
     private func useDemo() {
-        if let saved = library.addDemoRoute() {
-            importError = nil
-            path = [saved.id]
-        } else {
-            importError = String(localized: "The demo route isn't available.")
+        Task {
+            if let saved = await library.addDemoRoute() {
+                importError = nil
+                path = [saved.id]
+            } else {
+                importError = String(localized: "The demo route isn't available.")
+            }
         }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
+        let urls: [URL]
         do {
-            let urls = try result.get()
+            urls = try result.get()
+        } catch {
+            importError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+            return
+        }
+        Task {
             var imported: [SavedRoute] = []
             var lastError: Error?
             for url in urls {
-                do { imported.append(try library.importGPX(from: url, defaultSource: .files)) } catch { lastError = error }
+                do { imported.append(try await library.importGPX(from: url, defaultSource: .files)) } catch { lastError = error }
             }
-            if let lastError {
-                importError = String(localized: "Couldn't load GPX: \(lastError.localizedDescription)")
-            } else {
-                importError = nil
-            }
+            importError = lastError.map { String(localized: "Couldn't load GPX: \($0.localizedDescription)") }
             if imported.count == 1, let saved = imported.first { path = [saved.id] }
-        } catch {
-            importError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
         }
     }
 

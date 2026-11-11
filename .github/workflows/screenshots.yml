@@ -26,7 +26,7 @@ jobs:
 
       - name: Prepare the simulator
         run: |
-          xcrun simctl boot "$DEVICE"
+          xcrun simctl boot "$DEVICE" || true
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl ui "$DEVICE" appearance dark
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100 \

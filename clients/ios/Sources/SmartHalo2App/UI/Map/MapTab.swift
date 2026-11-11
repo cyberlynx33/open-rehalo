@@ -25,6 +25,8 @@ struct MapTab: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
+    /// The first `onAppear` places the camera; later ones (back from another tab) leave it alone.
+    @State private var appeared = false
     @State private var importError: String?
     @State private var showNav = false
     /// View controls (layers + 3D/2D). "3D" = the camera is tilted (the terrain is always 3D, so
@@ -86,6 +88,9 @@ struct MapTab: View {
 
     /// A route or destination is in play (destinations win, as on the map).
     private var hasContext: Bool { destination != nil || selection.route != nil }
+    /// Location denied and no simulated rider: nothing could be navigated, so the actions stay off
+    /// and the `.locationOff` notice says why.
+    private var locationBlocked: Bool { guidance.locationDenied && !connection.isDemo }
     private var contextKey: String? {
         destination.map { "destination \($0.id)" } ?? selection.route.map { "route \($0.id)" }
     }
@@ -167,12 +172,19 @@ struct MapTab: View {
         .onAppear {
             // The map opens on the rider: ask if Onboarding didn't get an answer.
             if !guidance.locationAuthorized && !guidance.locationDenied { guidance.requestLocationPermission() }
-            orientation = settings.mapOrientation
-            if orientation == .compass && guidance.locationAuthorized {
-                camera = .userLocation(followsHeading: true, fallback: userFallback)
-            } else {
-                if orientation == .compass { orientation = .north }    // no location: can't follow
-                frameSelection(animated: false)
+            // A fresh fix for `currentCoordinate` (the "far from the start" question).
+            guidance.primeLocation()
+            if !appeared {
+                // Only once: `onAppear` also fires on every return from another tab, and reframing
+                // then would throw away wherever the rider had put the map.
+                appeared = true
+                orientation = settings.mapOrientation
+                if orientation == .compass && guidance.locationAuthorized {
+                    camera = .userLocation(followsHeading: true, fallback: userFallback)
+                } else {
+                    if orientation == .compass { orientation = .north }    // no location: can't follow
+                    frameSelection(animated: false)
+                }
             }
             consumePendingNavigation()
             if guidance.following || guidance.summary != nil { showNav = true }
@@ -375,6 +387,7 @@ struct MapTab: View {
                              onNavigate: { destination != nil ? navigateToDestination() : startNavigation() },
                              onCompass: compassToDestination,
                              onSave: saveDestination)
+                    .disabled(locationBlocked)
                     .transition(.opacity)
             }
         }
@@ -412,6 +425,7 @@ struct MapTab: View {
     /// One message at a time, most urgent first.
     private var notice: MapNotice.Kind? {
         if leadingIn { return .leadingIn }
+        if library.isImporting { return .importing }
         if let importError { return .error(importError) }
         if guidance.locationDenied && !connection.isDemo { return .locationOff }
         if showNoHalo { return .noHalo }
@@ -506,14 +520,19 @@ struct MapTab: View {
     /// The bundled demo route goes through the library (saved + marked used); the built-in loop is
     /// only a fallback in demo mode if the bundle has no `DemoRoute.gpx`.
     private func useDemoRoute(_ fallback: GPXRoute) {
-        if let saved = library.addDemoRoute(), library.select(saved) { return }
-        selection.select(fallback, subtitle: demoSubtitle)
+        Task {
+            if let saved = await library.addDemoRoute(), library.select(saved) { return }
+            selection.select(fallback, subtitle: demoSubtitle)
+        }
     }
 
     /// NAVEGAR on the selected route; far from its start, ask first (lead me there / nearest point /
     /// on my own).
     private func startNavigation() {
         guard let route = selection.route else { return }
+        // Also reached from Route detail's NAVIGATE: without Location the ride would only ever say
+        // "Waiting for GPS…", so show the notice instead of starting.
+        guard !locationBlocked else { setChromeHidden(false); return }
         library.markUsed(id: route.id)
         importError = nil
         if !connection.isDemo, let here = currentCoordinate, let start = route.points.first {
@@ -547,9 +566,12 @@ struct MapTab: View {
         }
     }
 
-    /// Where the rider is now (the last known fix), if Location is on.
+    /// Where the rider is now, if Location is on: the guidance's fix when it is recent (it is primed
+    /// on appear), else what CoreLocation last cached. Before the first fix of a launch the cache
+    /// can be empty, which is why the fix is primed.
     private var currentCoordinate: CLLocationCoordinate2D? {
         guard guidance.locationAuthorized else { return nil }
+        if let loc = guidance.lastLocation, Date().timeIntervalSince(loc.timestamp) < 300 { return loc.coordinate }
         return CLLocationManager().location?.coordinate ?? guidance.userCoord
     }
 
@@ -682,12 +704,14 @@ struct MapTab: View {
 
     private func saveDestination() {
         guard let d = destination, let r = routed else { return }
-        do {
-            try library.importGPX(data: GPXWriter.data(name: d.name, points: r.route.points),
-                                  fallbackName: d.name, source: .appleMaps)
-            destinationSaved = true
-        } catch {
-            routeError = String(localized: "Couldn't save the route: \(error.localizedDescription)")
+        Task {
+            do {
+                try await library.importGPX(data: GPXWriter.data(name: d.name, points: r.route.points),
+                                            fallbackName: d.name, source: .appleMaps)
+                if destination?.id == d.id { destinationSaved = true }
+            } catch {
+                routeError = String(localized: "Couldn't save the route: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -804,23 +828,34 @@ struct MapTab: View {
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
+        let url: URL
         do {
-            guard let url = try result.get().first else { return }
-            // Saved to the library (Routes tab) and selected here.
-            let saved = try library.importGPX(from: url, defaultSource: .files)
-            importError = library.select(saved) ? nil : String(localized: "Couldn't read this route's GPX file.")
+            guard let first = try result.get().first else { return }
+            url = first
         } catch {
             importError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+            return
+        }
+        Task {
+            do {
+                // Saved to the library (Routes tab) and selected here.
+                let saved = try await library.importGPX(from: url, defaultSource: .files)
+                importError = library.select(saved) ? nil : String(localized: "Couldn't read this route's GPX file.")
+            } catch {
+                importError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+            }
         }
     }
 }
 
-/// Round floating map button (recenter, frame route, compass…).
+/// Round floating map button (recenter, frame route, compass…). `size` is 48 pt on the Map tab;
+/// Navigating passes `Theme.minTargetRiding` (UX_DESIGN §6: 56 pt on a ride).
 struct MapRoundButton: View {
     let systemImage: String
     let label: LocalizedStringKey
     var isOn: Bool = false
     var rotation: Double = 0
+    var size: CGFloat = 48
     let action: () -> Void
 
     var body: some View {
@@ -829,7 +864,7 @@ struct MapRoundButton: View {
                 .font(.system(size: 18, weight: .semibold))
                 .rotationEffect(.degrees(rotation))
                 .foregroundStyle(isOn ? Theme.onAccent : Theme.text)
-                .frame(width: 48, height: 48)
+                .frame(width: size, height: size)
                 .background(isOn ? Theme.accent : Theme.surface.opacity(0.94), in: Circle())
                 .overlay(Circle().strokeBorder(isOn ? Color.clear : Theme.stroke, lineWidth: 1))
                 .contentShape(Circle())

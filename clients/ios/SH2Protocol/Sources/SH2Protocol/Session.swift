@@ -10,6 +10,8 @@ import Foundation
 public actor Session {
 
     public enum SessionError: Error, Sendable {
+        /// No longer thrown: requests wait their turn (see `transceive`). Kept for callers that
+        /// still match it.
         case transceiveInProgress
         case commandFailed(step: String, code: UInt8?)
         case malformedReply(step: String)
@@ -19,6 +21,9 @@ public actor Session {
         /// The BLE link dropped while a command was in flight (common right after `resetPassword`,
         /// which un-pairs the device and may reset the connection).
         case disconnected
+        /// A request shorter than `[service, command]`. The firmware reads the command byte anyway:
+        /// a lone `[4]` reaches the STM32 as `{4,0}` and sends the nRF into its bootloader.
+        case requestTooShort(Int)
     }
 
     /// Per round-trip reply timeout. A healthy device answers in well under a second; 8s leaves
@@ -35,8 +40,19 @@ public actor Session {
     private var pendingID: UInt64 = 0
     /// Human label of the in-flight request, for log lines.
     private var pendingLabel = ""
+    /// The backstop of the in-flight request; cancelled as soon as it is answered.
+    private var timeoutTask: Task<Void, Never>?
     /// The last reply's CTRL had the `crypted` flag set.
     private var lastReplyEncrypted = false
+
+    // Requests take turns: one in flight at a time, in call order. The firmware handles one message
+    // at a time and overwrites a reply in progress when another arrives (`bslink_write`), and the
+    // app's callers (guidance on every fix, the carousel's answer every second, a tap on the light)
+    // don't coordinate with each other.
+    private var busy = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    /// Set once the session can't send any more; requests still queued fail with it.
+    private var terminal: SessionError?
 
     // UP channel accumulation (unsolicited notifications).
     private var upAccum = Data()
@@ -80,14 +96,30 @@ public actor Session {
 
     private func onStreamEnded() {
         SH2Log.log("session: notification stream ended — BLE link closed")
+        if terminal == nil { terminal = .disconnected }
         failPending(SessionError.disconnected)
     }
 
-    /// Stop consuming and fail any in-flight request.
+    /// Stop consuming and fail any in-flight request. Requests still waiting their turn fail too,
+    /// in order, as each takes the slot and finds the session closed.
     public func close() {
+        terminal = .closed
         consumer?.cancel()
         consumer = nil
         failPending(SessionError.closed)
+    }
+
+    // MARK: - One request at a time
+
+    private func acquire() async {
+        if !busy { busy = true; return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    /// Hand the slot to the next request in line, or free it.
+    private func release() {
+        if waiters.isEmpty { busy = false; return }
+        waiters.removeFirst().resume()
     }
 
     /// Install a handler for unsolicited UP-channel notifications (e.g. alarm reports).
@@ -121,6 +153,8 @@ public actor Session {
             return
         }
         pending = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
         lastReplyEncrypted = encrypted
         do {
             let reply = try Frame.decodeReply(ctrl: ctrl, payloadAccum: downAccum, cipher: cipher)
@@ -148,6 +182,8 @@ public actor Session {
     private func failPending(_ error: Error) {
         guard let p = pending else { return }
         pending = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
         downAccum = Data()
         SH2Log.log("✗ \(pendingLabel): \(error)")
         p.resume(throwing: error)
@@ -166,17 +202,32 @@ public actor Session {
 
     /// Send an application payload and await the reply. Port of `Session.transceive`.
     ///
+    /// Requests queue up: a call made while another is in flight waits its turn (in call order)
+    /// instead of failing, so a tap on the light during a ride no longer loses out to the guidance
+    /// or the carousel answers.
+    ///
     /// `crypted == nil` means "encrypt iff a cipher has been established" (matches the JS default).
     /// The REQUEST's encryption is controlled by this flag; the REPLY is decoded according to the
     /// `crypted` bit in its own CTRL using whatever cipher is currently set — which is why the
     /// handshake sets `cipher` *before* sending `setCentralPubKey` (the device encrypts that reply).
     @discardableResult
     public func transceive(_ appData: Data, crypted: Bool? = nil, label: String = "") async throws -> Data {
-        if pending != nil { throw SessionError.transceiveInProgress }
+        guard appData.count >= 2 else { throw SessionError.requestTooShort(appData.count) }
+        let tag = label.isEmpty ? "cmd \(SH2Log.hex(appData, max: 4))" : label
+
+        await acquire()
+        defer { release() }
+        // The caller's task may have been cancelled while this request waited its turn (a screen
+        // that left, a ride that ended): its command is stale, so it is not sent.
+        try Task.checkCancellation()
+        if let terminal { throw terminal }
+        // Encoded once it is our turn: the cipher may have been set by a handshake step ahead of us.
         let useCipher = (crypted ?? (cipher != nil)) ? cipher : nil
         let encoded = try Frame.encodeMessage(appData, cipher: useCipher)
-        let tag = label.isEmpty ? "cmd \(SH2Log.hex(appData, max: 4))" : label
-        SH2Log.log("→ \(tag)  [\(SH2Log.hex(appData))]")
+        SH2Log.log("→ \(tag)  [\(Self.loggable(appData))]")
+        // Chunks of an earlier reply that never got its CTRL, or that arrived after its request had
+        // timed out, must not be prepended to this reply.
+        downAccum = Data()
 
         pendingID &+= 1
         let myID = pendingID
@@ -189,17 +240,28 @@ public actor Session {
             Task { await self.sendFrames(encoded) }
             // Backstop: if no reply (device ignored the command, or the link stalled without a
             // clean disconnect), fail after the timeout instead of hanging forever.
-            Task { await self.timeoutGuard(myID) }
+            self.timeoutTask = Task { await self.timeoutGuard(myID) }
         }
+    }
+
+    /// The request bytes for the log. `authenticate` {0,3} and `setPassword` {0,4} carry the device
+    /// password, which must never reach the live log (it can be copied from the console): only their
+    /// header and length are shown.
+    static func loggable(_ appData: Data) -> String {
+        let b = [UInt8](appData)
+        if b.count >= 2, b[0] == 0, b[1] == 3 || b[1] == 4 {
+            return "\(SH2Log.hex(Data(b.prefix(2)))) … (\(b.count)B, password redacted)"
+        }
+        return SH2Log.hex(appData)
     }
 
     private func sendFrames(_ encoded: Frame.Encoded) async {
         do {
             for (i, chunk) in encoded.chunks.enumerated() {
-                try await transport.writeNoResponse(uuid: Frame.UUIDs.payload[i], data: chunk)
+                try await transport.write(uuid: Frame.UUIDs.payload[i], data: chunk)
             }
             // The CTRL write triggers processing on the device (`bslink_recv`).
-            try await transport.writeNoResponse(uuid: Frame.UUIDs.ctrl, data: encoded.ctrl)
+            try await transport.write(uuid: Frame.UUIDs.ctrl, data: encoded.ctrl)
         } catch {
             failPending(error)
         }

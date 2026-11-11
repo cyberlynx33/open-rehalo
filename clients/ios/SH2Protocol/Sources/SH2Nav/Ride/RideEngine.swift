@@ -202,7 +202,7 @@ public struct RideEngine: Sendable {
 
     /// Feed one fix to the ring guidance — every fix, unfiltered, as the official app does.
     private mutating func guideRing(_ fix: RideFix, _ compassHeading: Double?) -> NavDirector.Result {
-        let accuracy = fix.horizontalAccuracy >= 0 ? Int(fix.horizontalAccuracy.rounded()) : 999
+        let accuracy = fix.horizontalAccuracy >= 0 ? NavMath.trunc(fix.horizontalAccuracy.rounded()) : 999
         let loc = NavLocation(fix.lat, fix.lon, accuracy: accuracy)
         if compass != nil {
             // The iPhone compass only while slow or stopped; moving, the GPS direction.
@@ -226,7 +226,8 @@ public struct RideEngine: Sendable {
             : NavLocation(start.lat, start.lon)
         return NavMatch(status: r.status, target: target, along: best?.along ?? 0,
                         distance: best?.distance ?? .infinity, confident: r.confident,
-                        unambiguous: r.unambiguous, frozen: r.wrongWay != .none, arrived: r.arrived)
+                        unambiguous: r.unambiguous, frozen: r.wrongWay != .none, arrived: r.arrived,
+                        travel: r.travel.map { NavMath.normalized(NavMath.trunc($0.bearing.rounded())) })
     }
 
     // MARK: - Wrong way (matched engine)
@@ -246,10 +247,15 @@ public struct RideEngine: Sendable {
               let m = matcher, let best = m.last.best else { return nil }
         let reversed = route.reversed()
         var e = RideEngine(route: reversed, title: director.title, settings: director.settings, engine: .matched)
-        let d = director.continuing(on: reversed.navPoints.map { NavLocation($0.lat, $0.lon) })
-        e.director = d
-        e.director?.enableMatching(stepAlong: Self.stepAlong(d.steps, on: reversed))
+        var d = director.continuing(on: reversed.navPoints.map { NavLocation($0.lat, $0.lon) })
+        d.enableMatching(stepAlong: Self.stepAlong(d.steps, on: reversed))
         let along = max(0, reversed.length - best.along)
+        // The guidance starts on the route at the rider's step: otherwise the first fix builds it at
+        // step 0 and the ring shows the reversed route's first turn until the step sync catches up.
+        let here = lastFix.map { NavLocation($0.lat, $0.lon, accuracy: NavMath.trunc($0.horizontalAccuracy.rounded())) }
+            ?? NavLocation(best.point.lat, best.point.lon)
+        d.placeOnRoute(at: along, from: here)
+        e.director = d
         e.matcher = RouteMatcher(continuing: m, on: reversed, at: along)
         e.matchedAlong = along
         e.lastFix = lastFix
@@ -261,6 +267,7 @@ public struct RideEngine: Sendable {
         e.snapshot.progress = reversed.length > 0 ? min(1, along / reversed.length) : 0
         e.snapshot.remainingDistance = max(0, reversed.length - along)
         e.snapshot.remainingGain = reversed.remainingGain(from: along)
+        e.updateNextTurn()
         return (e, director.clearRing())
     }
 

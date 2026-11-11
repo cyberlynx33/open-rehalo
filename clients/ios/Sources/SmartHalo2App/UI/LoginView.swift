@@ -10,7 +10,17 @@ struct LoginView: View {
     /// it just dismisses.
     var onSuccess: () -> Void
 
-    enum Mode: String, CaseIterable { case login = "Log in", signup = "Sign up" }
+    enum Mode: CaseIterable {
+        case login, signup
+
+        /// Segment and button title, through the String Catalog.
+        var label: LocalizedStringKey {
+            switch self {
+            case .login: return "Log in"
+            case .signup: return "Sign up"
+            }
+        }
+    }
     @State private var mode: Mode = .login
     @State private var serverURL: String = AppSettings.shared.serverURLString
     @State private var email = ""
@@ -32,13 +42,17 @@ struct LoginView: View {
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
                 if !serverURL.isEmpty && !urlValid {
-                    Text("Enter a valid http(s) URL or host:port").font(.caption).foregroundStyle(.red)
+                    Text("Enter a valid http(s) URL or host:port").font(.caption).foregroundStyle(Theme.danger)
+                }
+                if AppSettings.normalize(serverURL)?.scheme == "http" {
+                    Text("This server uses plain HTTP: your password and session travel unencrypted. Use it only on your own network.")
+                        .font(.caption).foregroundStyle(Theme.warn)
                 }
             }
 
             Section {
                 Picker("", selection: $mode) {
-                    ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(Mode.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
             }
@@ -57,7 +71,7 @@ struct LoginView: View {
             }
 
             if let err = auth.lastError {
-                Section { Text(err).foregroundStyle(.red).font(.footnote) }
+                Section { Text(verbatim: err).foregroundStyle(Theme.danger).font(.footnote) }
             }
 
             Section {
@@ -66,7 +80,7 @@ struct LoginView: View {
                 } label: {
                     HStack {
                         if auth.busy { ProgressView() }
-                        Text(mode.rawValue).frame(maxWidth: .infinity)
+                        Text(mode.label).frame(maxWidth: .infinity)
                     }
                 }
                 .disabled(!canSubmit)

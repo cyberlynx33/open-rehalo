@@ -222,23 +222,6 @@
         }
       }
     },
-    "Alerts only arrive while this iPhone is connected to the Halo (in range, with the app running in the background)." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alerts only arrive while this iPhone is connected to the Halo (in range, with the app running in the background)."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El aviso solo llega mientras este iPhone está conectado al Halo (al alcance y con la app en segundo plano)."
-          }
-        }
-      }
-    },
     "Allow" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -290,23 +273,6 @@
         }
       }
     },
-    "Armed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Armed"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Armada"
-          }
-        }
-      }
-    },
     "Arms as soon as you leave your bike" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -337,23 +303,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arma o desarma la alarma en el Halo, sin el iPhone"
-          }
-        }
-      }
-    },
-    "Arms the alarm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Arms the alarm"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Arma la alarma"
           }
         }
       }
@@ -439,23 +388,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Batería al %lld %% — carga pronto el Halo"
-          }
-        }
-      }
-    },
-    "Battery on ring" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Battery on ring"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Batería en el anillo"
           }
         }
       }
@@ -1242,23 +1174,6 @@
         }
       }
     },
-    "Recent" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recientes"
-          }
-        }
-      }
-    },
     "Recent destinations" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1752,23 +1667,6 @@
         }
       }
     },
-    "Brightness %@ · %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Brightness %@ · %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Brillo %@ · %@"
-          }
-        }
-      }
-    },
     "Calibrate compass" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1867,23 +1765,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cambia la métrica"
-          }
-        }
-      }
-    },
-    "Choose a route" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose a route"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige una ruta"
           }
         }
       }
@@ -2020,23 +1901,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Próximamente: un editor del anillo rediseñado con vista previa. Estas son las herramientas actuales."
-          }
-        }
-      }
-    },
-    "Compass calibration: after tapping, turn the Halo slowly in a figure of eight." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compass calibration: after tapping, turn the Halo slowly in a figure of eight."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Calibrar la brújula: tras tocar, gira el Halo despacio dibujando un ocho."
           }
         }
       }
@@ -2483,23 +2347,6 @@
         }
       }
     },
-    "Demo: try the alarm alert in Settings › Advanced › Simulate alarm." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: try the alarm alert in Settings › Advanced › Simulate alarm."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: prueba el aviso de alarma en Ajustes › Avanzado › Simular alarma."
-          }
-        }
-      }
-    },
     "descent" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2564,23 +2411,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Desarmada"
-          }
-        }
-      }
-    },
-    "Disarms the alarm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Disarms the alarm"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Desarma la alarma"
           }
         }
       }
@@ -3299,23 +3129,6 @@
         }
       }
     },
-    "High" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "High"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alta"
-          }
-        }
-      }
-    },
     "I've rebooted it" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3329,23 +3142,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ya lo he reiniciado"
-          }
-        }
-      }
-    },
-    "Import a GPX from Wikiloc, Komoot or Files, or pick one from your routes." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import a GPX from Wikiloc, Komoot or Files, or pick one from your routes."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Importa un GPX desde Wikiloc, Komoot o Archivos, o elige una de tus rutas."
           }
         }
       }
@@ -3537,23 +3333,6 @@
         }
       }
     },
-    "Light brightness & mode" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Light brightness & mode"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Brillo y modo de la luz"
-          }
-        }
-      }
-    },
     "Live log" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3618,23 +3397,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cerrar sesión"
-          }
-        }
-      }
-    },
-    "Low" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Low"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Baja"
           }
         }
       }
@@ -3720,23 +3482,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mapa de la ruta"
-          }
-        }
-      }
-    },
-    "Medium" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Medium"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Media"
           }
         }
       }
@@ -5254,23 +4999,6 @@
         }
       }
     },
-    "Search my routes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search my routes"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buscar en mis rutas"
-          }
-        }
-      }
-    },
     "Section" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5284,23 +5012,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sección"
-          }
-        }
-      }
-    },
-    "Selected route" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selected route"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ruta seleccionada"
           }
         }
       }
@@ -5560,23 +5271,6 @@
         }
       }
     },
-    "Show battery on the ring" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show battery on the ring"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ver batería en el anillo"
-          }
-        }
-      }
-    },
     "Show on map" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5811,23 +5505,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GPS simulado"
-          }
-        }
-      }
-    },
-    "Since %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Since %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Desde las %@"
           }
         }
       }
@@ -6359,23 +6036,6 @@
         }
       }
     },
-    "Tap to disarm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap to disarm"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toca para desarmar"
-          }
-        }
-      }
-    },
     "Taps" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6440,40 +6100,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El Halo ya está desemparejado. Por una peculiaridad del firmware conserva la contraseña antigua hasta que se reinicia una vez: desconecta y vuelve a conectar la batería, o deja que se agote. Espera aquí: detectaremos cuándo vuelve."
-          }
-        }
-      }
-    },
-    "The new name is stored on the Halo itself." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The new name is stored on the Halo itself."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El nuevo nombre se guarda en el propio Halo."
-          }
-        }
-      }
-    },
-    "The ring lights up with its charge level" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The ring lights up with its charge level"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El anillo se ilumina con su nivel de carga"
           }
         }
       }
@@ -7464,23 +7090,6 @@
         }
       }
     },
-    "Your bike moved · %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your bike moved · %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu bici se ha movido · %@"
-          }
-        }
-      }
-    },
     "Your Halo is yours again. Its password is kept in this iPhone's Keychain." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8055,6 +7664,1247 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Parte de esta ruta es a pie."
+          }
+        }
+      }
+    },
+    "The new name is stored on the Halo itself, up to 19 characters." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The new name is stored on the Halo itself, up to 19 characters."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El nuevo nombre se guarda en el propio Halo, hasta 19 caracteres."
+          }
+        }
+      }
+    },
+    "Display & ring" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display & ring"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pantalla y anillo"
+          }
+        }
+      }
+    },
+    "Widgets" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widgets"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widgets"
+          }
+        }
+      }
+    },
+    "Clock off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clock off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apagar el reloj"
+          }
+        }
+      }
+    },
+    "Speedometer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speedometer"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velocímetro"
+          }
+        }
+      }
+    },
+    "Logo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logo"
+          }
+        }
+      }
+    },
+    "Low-battery warning" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low-battery warning"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviso de batería baja"
+          }
+        }
+      }
+    },
+    "Progress ring" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progress ring"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anillo de progreso"
+          }
+        }
+      }
+    },
+    "Progress: %lld%%" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progress: %lld%%"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progreso: %lld %%"
+          }
+        }
+      }
+    },
+    "Show progress" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show progress"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar el progreso"
+          }
+        }
+      }
+    },
+    "Progress off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progress off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apagar el progreso"
+          }
+        }
+      }
+    },
+    "Intro animations" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intro animations"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animaciones de introducción"
+          }
+        }
+      }
+    },
+    "Speedometer intro" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speedometer intro"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intro del velocímetro"
+          }
+        }
+      }
+    },
+    "Fitness intro" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fitness intro"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intro de fitness"
+          }
+        }
+      }
+    },
+    "External (handlebar) light" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "External (handlebar) light"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luz externa (manillar)"
+          }
+        }
+      }
+    },
+    "Animations off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animations off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apagar las animaciones"
+          }
+        }
+      }
+    },
+    "Fitness" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fitness"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fitness"
+          }
+        }
+      }
+    },
+    "Goal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objetivo"
+          }
+        }
+      }
+    },
+    "Daily goal: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daily goal: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objetivo diario: %@"
+          }
+        }
+      }
+    },
+    "Done: %@ · %lld%%" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done: %@ · %lld%%"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hecho: %@ · %lld %%"
+          }
+        }
+      }
+    },
+    "Show on the ring" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show on the ring"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar en el anillo"
+          }
+        }
+      }
+    },
+    "Preview progress ring" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview progress ring"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previsualizar el anillo de progreso"
+          }
+        }
+      }
+    },
+    "Live GPS ride recording (auto-tracking distance toward your goal) isn't implemented yet — set progress manually for now." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live GPS ride recording (auto-tracking distance toward your goal) isn't implemented yet — set progress manually for now."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La grabación de salidas por GPS (sumar la distancia al objetivo automáticamente) aún no está implementada: por ahora, ajusta el progreso a mano."
+          }
+        }
+      }
+    },
+    "Rides" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rides"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salidas"
+          }
+        }
+      }
+    },
+    "Loading…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargando…"
+          }
+        }
+      }
+    },
+    "No rides yet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No rides yet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay salidas."
+          }
+        }
+      }
+    },
+    "Ride %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ride %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salida %lld"
+          }
+        }
+      }
+    },
+    "Not signed in." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not signed in."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin sesión iniciada."
+          }
+        }
+      }
+    },
+    "Ride" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ride"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salida"
+          }
+        }
+      }
+    },
+    "Summary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summary"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resumen"
+          }
+        }
+      }
+    },
+    "Date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Date"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fecha"
+          }
+        }
+      }
+    },
+    "Duration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duration"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duración"
+          }
+        }
+      }
+    },
+    "Avg speed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avg speed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velocidad media"
+          }
+        }
+      }
+    },
+    "Calories" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calories"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calorías"
+          }
+        }
+      }
+    },
+    "CO₂ saved" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CO₂ saved"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CO₂ ahorrado"
+          }
+        }
+      }
+    },
+    "GPX export isn't available: the server's ride summary has no track. To follow routes, import a GPX in Routes." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPX export isn't available: the server's ride summary has no track. To follow routes, import a GPX in Routes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede exportar el GPX: el resumen de la salida del servidor no incluye el recorrido. Para seguir rutas, importa un GPX en Rutas."
+          }
+        }
+      }
+    },
+    "Log in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Log in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar sesión"
+          }
+        }
+      }
+    },
+    "Sign up" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign up"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear cuenta"
+          }
+        }
+      }
+    },
+    "Credentials" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credentials"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credenciales"
+          }
+        }
+      }
+    },
+    "New account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New account"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuenta nueva"
+          }
+        }
+      }
+    },
+    "First name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre"
+          }
+        }
+      }
+    },
+    "Last name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apellidos"
+          }
+        }
+      }
+    },
+    "Password" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraseña"
+          }
+        }
+      }
+    },
+    "Enter a valid http(s) URL or host:port" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid http(s) URL or host:port"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe una URL http(s) válida o host:puerto"
+          }
+        }
+      }
+    },
+    "Importing the route…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing the route…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importando la ruta…"
+          }
+        }
+      }
+    },
+    "Elevation gain" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elevation gain"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desnivel"
+          }
+        }
+      }
+    },
+    "No saved password for this device. Recovery required." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No saved password for this device. Recovery required."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay contraseña guardada para este dispositivo. Hace falta una recuperación."
+          }
+        }
+      }
+    },
+    "Saved password rejected. Recovery required." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved password rejected. Recovery required."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El anillo ha rechazado la contraseña guardada. Hace falta una recuperación."
+          }
+        }
+      }
+    },
+    "Trying an earlier password…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trying an earlier password…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probando una contraseña anterior…"
+          }
+        }
+      }
+    },
+    "Re-pairing…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-pairing…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volviendo a emparejar…"
+          }
+        }
+      }
+    },
+    "Un-pairing (reset-challenge)…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un-pairing (reset-challenge)…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desemparejando (reset-challenge)…"
+          }
+        }
+      }
+    },
+    "Un-paired ✓ — the ring must reboot once to finish." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un-paired ✓ — the ring must reboot once to finish."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desemparejado ✓: el anillo tiene que reiniciarse una vez para terminar."
+          }
+        }
+      }
+    },
+    "Connected." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conectado."
+          }
+        }
+      }
+    },
+    "front light failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "front light failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la luz frontal ha fallado: %@"
+          }
+        }
+      }
+    },
+    "light settings failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "light settings failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "los ajustes de la luz han fallado: %@"
+          }
+        }
+      }
+    },
+    "clock failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clock failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el reloj ha fallado: %@"
+          }
+        }
+      }
+    },
+    "speedometer failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "speedometer failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el velocímetro ha fallado: %@"
+          }
+        }
+      }
+    },
+    "charge anim failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "charge anim failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la animación de carga ha fallado: %@"
+          }
+        }
+      }
+    },
+    "anim off failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anim off failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagar la animación ha fallado: %@"
+          }
+        }
+      }
+    },
+    "%@ failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ ha fallado: %2$@"
+          }
+        }
+      }
+    },
+    "Renamed to “%@”." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renamed to “%@”."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renombrado a “%@”."
+          }
+        }
+      }
+    },
+    "rename failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rename failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el renombrado ha fallado: %@"
+          }
+        }
+      }
+    },
+    "alarm: couldn't get seed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alarm: couldn't get seed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alarma: no se pudo leer la semilla"
+          }
+        }
+      }
+    },
+    "alarm: the Halo rejected the configuration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alarm: the Halo rejected the configuration"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alarma: el Halo ha rechazado la configuración"
+          }
+        }
+      }
+    },
+    "DEMO: saved password rejected. Recovery required." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DEMO: saved password rejected. Recovery required."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DEMO: contraseña guardada rechazada. Hace falta una recuperación."
+          }
+        }
+      }
+    },
+    "DEMO: turn the alarm on first." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DEMO: turn the alarm on first."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DEMO: activa antes la alarma."
+          }
+        }
+      }
+    },
+    "That password was rejected by the ring." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That password was rejected by the ring."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El anillo ha rechazado esa contraseña."
+          }
+        }
+      }
+    },
+    "Saved password removed — recover again to re-pair." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved password removed — recover again to re-pair."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraseña guardada eliminada: recupera de nuevo para volver a emparejar."
+          }
+        }
+      }
+    },
+    "alarm report unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alarm report unavailable"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "informe de alarma no disponible"
+          }
+        }
+      }
+    },
+    "getVersions failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "getVersions failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "getVersions ha fallado: %@"
+          }
+        }
+      }
+    },
+    "getSerial failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "getSerial failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "getSerial ha fallado: %@"
+          }
+        }
+      }
+    },
+    "Alarm demo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alarm demo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo de la alarma"
+          }
+        }
+      }
+    },
+    "This server uses plain HTTP: your password and session travel unencrypted. Use it only on your own network." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server uses plain HTTP: your password and session travel unencrypted. Use it only on your own network."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este servidor usa HTTP sin cifrar: tu contraseña y tu sesión viajan en claro. Úsalo solo en tu propia red."
           }
         }
       }

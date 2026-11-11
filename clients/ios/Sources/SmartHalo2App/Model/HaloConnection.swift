@@ -82,10 +82,9 @@ final class HaloConnection: ObservableObject {
         bootstrapped = true
         if settings.demoMode {
             startDemo()
-        } else if central.state == .poweredOn {
+        } else {
             Task { await autoConnect() }
         }
-        // else: handleCentralState() connects as soon as Bluetooth reports .poweredOn.
     }
 
     /// Make `device` "my Halo" (persisted) and connect to it. Used by the pairing step / ScanView.
@@ -124,8 +123,17 @@ final class HaloConnection: ObservableObject {
             return
         }
         retryTask?.cancel()
-        if controller.phase == .ready { return }
-        Task { await controller.start() }
+        switch controller.phase {
+        case .ready:
+            return
+        case .connecting, .authenticating:
+            // A connect or a handshake is in flight: a second `start()` over it would ask
+            // CoreBluetooth to connect a peripheral that already is, and could leave the ring
+            // authenticated with the app stuck in "Connecting…". Begin again from a clean link.
+            Task { await controller.restart() }
+        default:
+            Task { await controller.start() }
+        }
     }
 
     /// User-initiated disconnect (no auto-reconnect until `retry()`).
@@ -155,6 +163,10 @@ final class HaloConnection: ObservableObject {
             recompute(controller?.phase)
             return
         }
+        // A saved Halo is the reason to start Bluetooth (and, the first time, its permission
+        // prompt); with none, the pairing step's scan starts it. Until it reports `.poweredOn`,
+        // `handleCentralState()` brings us back here.
+        central.activate()
         guard central.state == .poweredOn else { return }
         guard let device = await central.retrieveDevice(id: id, name: settings.myHaloName) else {
             SH2Log.log("connection: saved Halo \(id.uuidString.prefix(8)) not known to CoreBluetooth — pair again")

@@ -27,7 +27,9 @@ final class DeviceController: ObservableObject {
     @Published var lightOn = false
     /// The ring's carousel card, as it last reported it (BLE notification 5,2); 0 = Navigation.
     @Published private(set) var carouselCard: UInt8?
-    @Published var brightness: Double = 128      // 0...255
+    /// Front light brightness, a percentage in the firmware's 10…100 range (`{1,16}`), and its mode.
+    /// The ring doesn't report them: these are the last values this app applied, kept per ring.
+    @Published var brightness: Double = 100
     @Published var blinking = false
     /// The Halo's alarm configuration was last applied OK on this connection (`alarmConfigure`).
     @Published private(set) var alarmSynced = false
@@ -80,6 +82,7 @@ final class DeviceController: ObservableObject {
         self.central = central
         self.demoTransport = demoTransport
         loadBatteryCache()
+        loadLightCache()
     }
 
     // MARK: - Lifecycle
@@ -92,7 +95,7 @@ final class DeviceController: ObservableObject {
         let generation = linkGeneration
         do {
             phase = .connecting
-            statusMessage = "Connecting…"
+            statusMessage = String(localized: "Connecting…")
 
             // Demo mode: a fake device over a MockTransport — skip Bluetooth, auth and recovery.
             if let demoTransport {
@@ -113,6 +116,10 @@ final class DeviceController: ObservableObject {
             } catch BluetoothCentral.CentralError.superseded {
                 return                      // a newer start() owns the phase now
             } catch BluetoothCentral.CentralError.cancelled {
+                // close() cancelled it: a restart() owns the phase (its start() follows), and a
+                // plain disconnect sets its own. Flipping to .disconnected here would make
+                // HaloConnection schedule a reconnect on top of the restart's.
+                guard generation == linkGeneration else { return }
                 phase = .disconnected
                 statusMessage = ""
                 return
@@ -124,7 +131,7 @@ final class DeviceController: ObservableObject {
             try await session.open()
 
             phase = .authenticating
-            statusMessage = "Authenticating…"
+            statusMessage = String(localized: "Authenticating…")
             let accepted = try await authenticate(session, only: typed)
             // A close() or a newer start() took over meanwhile: the phase is theirs.
             guard generation == linkGeneration else { return }
@@ -132,8 +139,8 @@ final class DeviceController: ObservableObject {
                 await finishReady()
             } else {
                 statusMessage = KeychainStore.load(deviceID: deviceID) == nil
-                    ? "No saved password for this device. Recovery required."
-                    : "Saved password rejected. Recovery required."
+                    ? String(localized: "No saved password for this device. Recovery required.")
+                    : String(localized: "Saved password rejected. Recovery required.")
                 phase = .needsRecovery
             }
         } catch {
@@ -181,7 +188,7 @@ final class DeviceController: ObservableObject {
         // Capped: each try is one round trip, and a keychain full of stale entries shouldn't stall
         // the connection.
         for candidate in KeychainStore.fallbackPasswords(deviceID: deviceID).prefix(5) {
-            statusMessage = "Trying an earlier password…"
+            statusMessage = String(localized: "Trying an earlier password…")
             guard try await session.authenticate(password: Data(candidate.utf8)) else { continue }
             try? KeychainStore.save(password: candidate, deviceID: deviceID, synchronizable: sync)
             SH2Log.log("auth: the ring took an earlier stored password — keeping it")
@@ -189,7 +196,7 @@ final class DeviceController: ObservableObject {
         }
 
         guard try await session.authenticate(password: Data()) else { return false }
-        statusMessage = "Re-pairing…"
+        statusMessage = String(localized: "Re-pairing…")
         let password = reusablePassword(saved) ?? Recovery.generateDevicePassword()
         // Stored before the ring has it: if the reply is lost, the next connection still has it.
         try KeychainStore.save(password: password, deviceID: deviceID, synchronizable: sync)
@@ -223,12 +230,12 @@ final class DeviceController: ObservableObject {
         do {
             phase = .recovering
             // 1. Un-pair (clears the stored password in flash). Idempotent — safe to repeat.
-            statusMessage = "Un-pairing (reset-challenge)…"
+            statusMessage = String(localized: "Un-pairing (reset-challenge)…")
             try await Recovery.resetPairing(session: session)
             // 2. Re-pair (only works once the ring has rebooted). The password is stored first, so
             //    the ring never ends up with one this iPhone doesn't have; after the reboot,
             //    `start()` hands it to the un-paired ring.
-            statusMessage = "Re-pairing…"
+            statusMessage = String(localized: "Re-pairing…")
             let saved = KeychainStore.load(deviceID: deviceID)
             let password = reusablePassword(saved) ?? Recovery.generateDevicePassword()
             try KeychainStore.save(password: password, deviceID: deviceID,
@@ -239,10 +246,12 @@ final class DeviceController: ObservableObject {
                 if password != saved { newlyGeneratedPassword = password }
                 await finishReady()
             } catch let e as Session.SessionError {
-                // Empty-password authenticate rejected → the ring still holds its old password in
-                // RAM → it must reboot. Everything else is a genuine error.
-                if case .commandFailed(let step, _) = e, step == "authenticate" {
-                    statusMessage = "Un-paired ✓ — the ring must reboot once to finish."
+                // Empty-password authenticate answered RET_FAIL → the ring still holds its old
+                // password in RAM → it must reboot. Anything else (an empty reply, DENIED, a link
+                // error) says nothing about the password and is a genuine error: "Try again".
+                if case .commandFailed(let step, let code) = e, step == "authenticate",
+                   code == ReturnCode.fail.rawValue {
+                    statusMessage = String(localized: "Un-paired ✓ — the ring must reboot once to finish.")
                     phase = .needsReboot
                 } else {
                     throw e
@@ -259,22 +268,33 @@ final class DeviceController: ObservableObject {
     /// runs again and asks for the reboot again.
     func reconnectAndFinish() async {
         if isDemo { await demoFinishRecovery(); return }
-        close()
-        try? await Task.sleep(for: .seconds(1))   // let the disconnect settle before reconnecting
-        await start()
+        await restart()
         if case .needsRecovery = phase {
             await recover()
         }
     }
 
+    /// Let go of the current link (or pending connect) and connect again from scratch. The pause
+    /// lets CoreBluetooth report the old link's disconnect before the new connect is registered.
+    /// `start()` is not reentrant: a `start()` over a link that is being set up would give one link
+    /// two owners, so a retry during `.connecting`/`.authenticating` comes through here.
+    func restart(only typed: String? = nil) async {
+        close()
+        try? await Task.sleep(for: .seconds(1))
+        await start(only: typed)
+    }
+
     private func finishReady() async {
         phase = .ready
-        statusMessage = "Connected."
+        statusMessage = String(localized: "Connected.")
         if let session { await installUpHandler(session) }
         await refreshInfo()
         await refreshDeviceState()
         await syncAlarm()
         await applyRingCards()
+        // The ring keeps the light's mode in RAM only: give it back what the rider chose.
+        if lightSettingsApplied { await applyLightSettings(silently: true) }
+        await applyTouchSounds()
     }
 
     func close() {
@@ -304,23 +324,56 @@ final class DeviceController: ObservableObject {
     // All control methods are @MainActor (the whole class is). `session.transceive(...)` hops onto
     // the Session actor to do the BLE round-trip and hops back here on return, so `@Published`
     // state is always assigned on the main actor. Command payloads are sent encrypted by default
-    // (the session has a cipher after the handshake).
+    // (the session has a cipher after the handshake). The session queues requests: a tap on the
+    // light while the guidance or the carousel's answer is in flight waits its turn, it isn't lost.
 
     func setLight(on: Bool) async {
         guard let session = readySession else { return }
         do {
             _ = try await session.transceive(Commands.frontLight(on: on))
             lightOn = on
-        } catch { statusMessage = "front light failed: \(describe(error))" }
+        } catch { statusMessage = String(localized: "front light failed: \(describe(error))") }
     }
 
-    func applyLightSettings() async {
+    /// Send the light's brightness and mode. The ring stores its blink lock only from the 3-byte form
+    /// of `{1,16}` and ships locked (blinking silently becomes steady), so the first time blinking is
+    /// wanted that form goes out, its mode rocker showing once on the OLED; afterwards the 4-byte
+    /// form, silent (`silently`) when it only restores the settings on a reconnect.
+    func applyLightSettings(silently: Bool = false) async {
         guard let session = readySession else { return }
         let mode: Commands.LightMode = blinking ? .blinking : .normal
-        let level = UInt8(max(0, min(255, brightness.rounded())))
+        let level = UInt8(max(10, min(100, brightness.rounded())))
+        let needsUnlock = blinking && !blinkUnlocked
+        let cmd = needsUnlock
+            ? Commands.frontLightUnlockBlinking(mode: mode, brightness: level)
+            : Commands.frontLightSettings(mode: mode, brightness: level, silenceRocker: silently)
         do {
-            _ = try await session.transceive(Commands.frontLightSettings(mode: mode, brightness: level))
-        } catch { statusMessage = "light settings failed: \(describe(error))" }
+            _ = try await session.transceive(cmd, label: "lightSettings")
+            if needsUnlock { blinkUnlocked = true }
+            saveLightCache()
+        } catch { statusMessage = String(localized: "light settings failed: \(describe(error))") }
+    }
+
+    // MARK: - Front light settings (per ring)
+
+    private var lightKey: String { "sh2.light.\(deviceID)" }
+    /// This app has cleared the ring's blink lock (the 3-byte `{1,16}`); the ring keeps it in flash.
+    private var blinkUnlocked = false
+    /// Light settings were applied to this ring at least once: there is something to restore.
+    private var lightSettingsApplied = false
+
+    private func loadLightCache() {
+        guard let c = UserDefaults.standard.dictionary(forKey: lightKey) else { return }
+        if let b = c["brightness"] as? Double { brightness = b }
+        blinking = c["blinking"] as? Bool ?? false
+        blinkUnlocked = c["unlocked"] as? Bool ?? false
+        lightSettingsApplied = true
+    }
+
+    private func saveLightCache() {
+        lightSettingsApplied = true
+        UserDefaults.standard.set(["brightness": brightness, "blinking": blinking, "unlocked": blinkUnlocked],
+                                  forKey: lightKey)
     }
 
     // MARK: - Ring effects (animations) + device settings
@@ -330,48 +383,53 @@ final class DeviceController: ObservableObject {
         let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let cmd = Commands.showClock(hour: UInt8(c.hour ?? 0), minute: UInt8(c.minute ?? 0))
         do { _ = try await session.transceive(cmd, label: "showClock") }
-        catch { statusMessage = "clock failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "clock failed: \(describe(error))") }
     }
 
+    /// The ring's speedometer is its Speed card: jump there, and the ring asks for the speed (the
+    /// ride's, or the snail when still). `{1,18}` on its own only feeds that card and draws nothing.
     func showSpeedometerDemo() async {
-        guard let session = readySession else { return }
-        do { _ = try await session.transceive(Commands.showSpeedometer(percentage: 60, speed: 24), label: "speedometer") }
-        catch { statusMessage = "speedometer failed: \(describe(error))" }
+        guard readySession != nil else { return }
+        showCard(.speed)
     }
 
     func showCharge() async {
         guard let session = readySession else { return }
         do { _ = try await session.transceive(Commands.showStateOfCharge(), label: "showCharge") }
-        catch { statusMessage = "charge anim failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "charge anim failed: \(describe(error))") }
     }
 
     func animationsOff() async {
         guard let session = readySession else { return }
         do { _ = try await session.transceive(Commands.animOff(), label: "animOff") }
-        catch { statusMessage = "anim off failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "anim off failed: \(describe(error))") }
     }
 
     /// Fire a display/ring command (fire-and-forget; errors surface in statusMessage + the live log).
     func run(_ cmd: Data, _ label: String) async {
         guard let session = readySession else { return }
         do { _ = try await session.transceive(cmd, label: label) }
-        catch { statusMessage = "\(label) failed: \(describe(error))" }
+        catch { statusMessage = String(localized: "\(label) failed: \(describe(error))") }
     }
 
     // M1 — display widgets / assistant
     func showLogo() async            { await run(Commands.logo(), "logo") }
-    func showDemo() async            { await run(Commands.demo(), "demo") }
-    func showCompass(heading: UInt16) async { await run(Commands.compass(heading: heading), "compass") }
-    func compassOff() async          { await run(Commands.compassOff(), "compassOff") }
+    /// The ring's own demo of its alarm (`{1,25}`): armed, then the warning growl, then off. Never
+    /// the siren state: the ring counts it as a real trigger.
+    func showDemo() async {
+        await run(Commands.alarmDemo(.armed), "alarmDemo")
+        try? await Task.sleep(for: .seconds(2))
+        await run(Commands.alarmDemo(.warning, progress: 60), "alarmDemo")
+        try? await Task.sleep(for: .seconds(2))
+        await run(Commands.alarmDemo(.off), "alarmDemo")
+    }
+    // Heartbeat {1,9}, compass {1,11}, compass calibration {4,3} and the fitness intro {1,27} have
+    // no working handler in the SmartHalo 2's firmware and are not offered.
     func showProgress(_ pct: UInt8) async   { await run(Commands.progress(percentage: pct), "progress") }
     func progressOff() async         { await run(Commands.progressOff(), "progressOff") }
-    func showHeartbeat() async       { await run(Commands.heartbeat(), "heartbeat") }
-    func heartbeatOff() async        { await run(Commands.heartbeatOff(), "heartbeatOff") }
     func showLowBattery() async      { await run(Commands.lowBattery(), "lowBattery") }
     func clockOff() async            { await run(Commands.clockOff(), "clockOff") }
-    func speedometerOff() async      { await run(Commands.speedometerOff(), "speedometerOff") }
     func showSpeedometerIntro() async { await run(Commands.speedometerIntro(), "speedometerIntro") }
-    func showFitnessIntro() async    { await run(Commands.fitnessIntro(), "fitnessIntro") }
     func setFrontExternal(on: Bool) async { await run(Commands.frontExternalToggle(on: on), "frontExternal") }
     func carouselGoto(_ i: UInt8) async { await run(Commands.carouselPosition(i), "carouselPosition") }
 
@@ -380,10 +438,10 @@ final class DeviceController: ObservableObject {
         guard let session = readySession, !deviceName.isEmpty else { return false }
         do {
             _ = try await session.transceive(Commands.setName(deviceName), label: "setName")
-            statusMessage = "Renamed to “\(deviceName)”."
+            statusMessage = String(localized: "Renamed to “\(deviceName)”.")
             return true
         } catch {
-            statusMessage = "rename failed: \(describe(error))"
+            statusMessage = String(localized: "rename failed: \(describe(error))")
             return false
         }
     }
@@ -418,7 +476,7 @@ final class DeviceController: ObservableObject {
         let vigilant = vigilant ?? settings.alarmVigilant
         let armed = on && code != nil
         guard readySession != nil, let seed = await alarmSeed() else {
-            statusMessage = "alarm: couldn't get seed"
+            statusMessage = String(localized: "alarm: couldn't get seed")
             if !isChange { alarmSynced = false }
             return false
         }
@@ -426,7 +484,7 @@ final class DeviceController: ObservableObject {
                                           armed: armed, vigilant: vigilant)
         guard let r = await transceiveRetrying(cmd, "alarmConfigure"),
               r.first == ReturnCode.ok.rawValue else {
-            statusMessage = "alarm: the Halo rejected the configuration"
+            statusMessage = String(localized: "alarm: the Halo rejected the configuration")
             if !isChange { alarmSynced = false }
             return false
         }
@@ -465,20 +523,16 @@ final class DeviceController: ObservableObject {
         return report
     }
 
-    /// `transceive`, retrying briefly while another command is in flight. Nil on failure.
+    /// `transceive` on the ready session (requests queue up inside it). Nil on failure, with the
+    /// error in `statusMessage`.
     private func transceiveRetrying(_ cmd: Data, _ label: String) async -> Data? {
-        for attempt in 0..<6 {
-            guard let session = readySession else { return nil }
-            do {
-                return try await session.transceive(cmd, label: label)
-            } catch Session.SessionError.transceiveInProgress {
-                try? await Task.sleep(for: .milliseconds(150 * (attempt + 1)))
-            } catch {
-                statusMessage = "\(label) failed: \(describe(error))"
-                return nil
-            }
+        guard let session = readySession else { return nil }
+        do {
+            return try await session.transceive(cmd, label: label)
+        } catch {
+            statusMessage = String(localized: "\(label) failed: \(describe(error))")
+            return nil
         }
-        return nil
     }
 
     // MARK: - UP channel
@@ -620,7 +674,7 @@ final class DeviceController: ObservableObject {
             // Goal, calories, CO2: not fed by rehalo — keep the mask, the ring shows its defaults.
             data = Commands.carouselMask(mask)
         }
-        sendNav([NavCommand(data: data, label: "carousel")])
+        sendNav([NavCommand(data: data, label: "carousel")], droppable: true)
     }
 
     // MARK: - Tap shortcuts
@@ -648,8 +702,8 @@ final class DeviceController: ObservableObject {
 
     // MARK: - Call alerts
     //
-    // `CallAlertController` decides; this talks to the ring. Through the `sendNav` queue: `run` drops
-    // a command while another is in flight, and the guidance sends one every few seconds.
+    // `CallAlertController` decides; this talks to the ring. Through the `sendNav` queue, so the
+    // alert and its sound go out in order with the guidance's commands.
 
     /// The ring has been told about an incoming call and not yet told it's over.
     private(set) var callAlertActive = false
@@ -700,7 +754,7 @@ final class DeviceController: ObservableObject {
     func simulateNeedsRecovery() {
         guard isDemo, phase == .ready else { return }
         demoRecoveryPending = true
-        statusMessage = "DEMO: saved password rejected. Recovery required."
+        statusMessage = String(localized: "DEMO: saved password rejected. Recovery required.")
         SH2Log.log("DEMO: simulated password rejection — recovery required")
         phase = .needsRecovery
     }
@@ -708,20 +762,20 @@ final class DeviceController: ObservableObject {
     private func demoRecover() async {
         guard demoRecoveryPending, phase == .needsRecovery else { return }
         phase = .recovering
-        statusMessage = "Un-pairing (reset-challenge)…"
+        statusMessage = String(localized: "Un-pairing (reset-challenge)…")
         SH2Log.log("DEMO: reset-challenge (simulated)")
         try? await Task.sleep(for: .seconds(1.5))
-        statusMessage = "Un-paired ✓ — the ring must reboot once to finish."
+        statusMessage = String(localized: "Un-paired ✓ — the ring must reboot once to finish.")
         phase = .needsReboot
     }
 
     private func demoFinishRecovery() async {
         guard demoRecoveryPending else { return }
         phase = .connecting
-        statusMessage = "Connecting…"
+        statusMessage = String(localized: "Connecting…")
         try? await Task.sleep(for: .seconds(1.2))
         phase = .recovering
-        statusMessage = "Re-pairing…"
+        statusMessage = String(localized: "Re-pairing…")
         try? await Task.sleep(for: .seconds(0.8))
         demoRecoveryPending = false
         newlyGeneratedPassword = Recovery.generateDevicePassword()
@@ -736,7 +790,7 @@ final class DeviceController: ObservableObject {
         mock.simulateAlarm()
         await syncAlarm()
         if lastAlarmReport?.triggerCount ?? 0 == 0 {
-            statusMessage = "DEMO: turn the alarm on first."
+            statusMessage = String(localized: "DEMO: turn the alarm on first.")
         }
     }
 
@@ -744,39 +798,88 @@ final class DeviceController: ObservableObject {
     func playSound() async        { await run(Commands.soundPlay(), "soundPlay") }
     func stopSound() async        { await run(Commands.soundStop(), "soundStop") }
     func setTouchSounds(on: Bool) async { await run(Commands.soundTouch(on: on), "touchSounds") }
+
+    /// Settings › Advanced › Sound & touch keeps the rider's choice under this key; the ring isn't
+    /// asked and may have rebooted since, so it is sent again on every connection.
+    static let touchSoundsKey = "sh2.touchSounds"
+    /// Give the ring back the rider's touch-sound choice. Only a choice made in this app: with
+    /// none stored, the ring keeps whatever it has (its default, or the official app's setting).
+    private func applyTouchSounds() async {
+        guard let on = UserDefaults.standard.object(forKey: Self.touchSoundsKey) as? Bool else { return }
+        await setTouchSounds(on: on)
+    }
     func runTouchOnboarding() async { await run(Commands.touchOnboarding(), "touchOnboarding") }
 
     // Navigation — driven by GuidanceController (`NavDirector`, reimplementation of the official app).
-    private var navQueue: Task<Void, Never>?
+
+    /// A batch of commands waiting for the ring, in the order they were queued.
+    private struct NavBatch {
+        let commands: [NavCommand]
+        /// A per-fix batch (the guidance's, a card's answer): the next one supersedes it when the
+        /// ring is slow to take them.
+        let droppable: Bool
+        var isCarouselAnswer: Bool { commands.count == 1 && commands[0].label == "carousel" }
+        var hasDelay: Bool { commands.contains { $0.delay > 0 } }
+        var labels: String { commands.map(\.label).joined(separator: ", ") }
+    }
+    private var navPending: [NavBatch] = []
+    /// Drains `navPending`; `cancelNav()` cancels it, which also cuts short a delay it is sleeping.
+    private var navWorker: Task<Void, Never>?
+    /// Beyond this many waiting batches the oldest droppable ones go: with the ring slow to answer,
+    /// the per-fix batches would otherwise pile up and the ring later drain positions long gone.
+    private static let navPendingLimit = 4
 
     /// Send navigation commands strictly in order, one in flight at a time (the official SDK's FIFO
-    /// queue), after any earlier batch; a command's `delay` waits before it.
-    func sendNav(_ commands: [NavCommand]) {
+    /// queue), after any earlier batch; a command's `delay` waits before it. `droppable` marks a
+    /// batch the next one makes stale (a fix's guidance, a card's answer).
+    func sendNav(_ commands: [NavCommand], droppable: Bool = false) {
         guard !commands.isEmpty else { return }
-        let previous = navQueue
-        navQueue = Task { @MainActor [weak self] in
-            await previous?.value
-            for cmd in commands {
-                if cmd.delay > 0 { try? await Task.sleep(for: .seconds(cmd.delay)) }
-                await self?.transceiveWaiting(cmd.data, cmd.label)
+        let batch = NavBatch(commands: commands, droppable: droppable)
+        if batch.isCarouselAnswer, let i = navPending.firstIndex(where: { $0.isCarouselAnswer }) {
+            navPending[i] = batch           // the ring asks every second: only the newest answer counts
+        } else {
+            navPending.append(batch)
+        }
+        // Never a batch with a timed command (the arrival's `navOff` 10 s later) nor one the caller
+        // didn't mark: intros, stops, alerts and sounds always go out.
+        while navPending.count > Self.navPendingLimit,
+              let i = navPending.firstIndex(where: { $0.droppable && !$0.hasDelay }) {
+            let dropped = navPending.remove(at: i)
+            SH2Log.log("nav queue: dropped a stale batch (\(dropped.labels))")
+        }
+        if navWorker == nil {
+            navWorker = Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.drainNav()
             }
         }
     }
 
-    /// `run`, retrying briefly while another command is in flight (the session takes one at a time).
-    private func transceiveWaiting(_ cmd: Data, _ label: String) async {
-        for attempt in 0..<8 {
-            guard let session = readySession else { return }
-            do {
-                _ = try await session.transceive(cmd, label: label)
-                return
-            } catch Session.SessionError.transceiveInProgress {
-                try? await Task.sleep(for: .milliseconds(100 * (attempt + 1)))
-            } catch {
-                statusMessage = "\(label) failed: \(describe(error))"
-                return
+    private func drainNav() async {
+        while !navPending.isEmpty {
+            // Cancelled: cancelNav() has emptied the queue, and whatever it holds now belongs to
+            // the worker it started after. Leave `navWorker` to that one.
+            if Task.isCancelled { return }
+            let batch = navPending.removeFirst()
+            for cmd in batch.commands {
+                if cmd.delay > 0 {
+                    // Ends early when cancelled: the arrival's 10 s `navOff` must not hold back
+                    // the next ride's intro.
+                    try? await Task.sleep(for: .seconds(cmd.delay))
+                    if Task.isCancelled { return }
+                }
+                await run(cmd.data, cmd.label)
             }
         }
+        navWorker = nil
+    }
+
+    /// Drop the navigation commands not sent yet, delays included. A new ride calls it so that its
+    /// intro doesn't queue behind the previous ride's arrival sequence (a `navOff` 10 s later).
+    func cancelNav() {
+        navPending.removeAll()
+        navWorker?.cancel()
+        navWorker = nil
     }
 
     // Device settings (M4)
@@ -789,7 +892,6 @@ final class DeviceController: ObservableObject {
         updateBattery(level: state.stateOfCharge, charging: state.charging,
                       plugged: state.plugged ?? state.charging, temperature: state.temperature)
     }
-    func calibrateCompass() async { await run(Commands.compassCalibrate(), "compassCalibrate") }
     func syncTime() async {
         let secs = UInt64(max(0, Date().timeIntervalSince1970))
         let lang = Locale.current.language.languageCode?.identifier ?? "en"
@@ -806,24 +908,20 @@ final class DeviceController: ObservableObject {
     func useSavedPassword(_ password: String) async -> Bool {
         let password = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !password.isEmpty, !isDemo else { return false }
-        close()
-        try? await Task.sleep(for: .seconds(1))   // let the disconnect settle before reconnecting
-        await start(only: password)
+        await restart(only: password)
         if phase == .ready { return true }
-        close()
-        try? await Task.sleep(for: .seconds(1))
-        await start()
-        statusMessage = "That password was rejected by the ring."
+        await restart()
+        statusMessage = String(localized: "That password was rejected by the ring.")
         return false
     }
 
     func forgetSavedPassword() {
         KeychainStore.delete(deviceID: deviceID)
-        statusMessage = "Saved password removed — recover again to re-pair."
+        statusMessage = String(localized: "Saved password removed — recover again to re-pair.")
     }
 
     func refreshAlarmReport() async {
-        if await fetchAlarmReport(recap: false) == nil { statusMessage = "alarm report unavailable" }
+        if await fetchAlarmReport(recap: false) == nil { statusMessage = String(localized: "alarm report unavailable") }
     }
 
     func refreshInfo() async {
@@ -834,7 +932,7 @@ final class DeviceController: ObservableObject {
                 firmwareVersion = r[1...4].map { "\($0)" }.joined(separator: ".")
                 bootloaderVersion = r[5...8].map { "\($0)" }.joined(separator: ".")
             }
-        } catch { statusMessage = "getVersions failed: \(describe(error))" }
+        } catch { statusMessage = String(localized: "getVersions failed: \(describe(error))") }
 
         do {
             let r = try await session.transceive(Commands.getSerial(0))
@@ -845,7 +943,7 @@ final class DeviceController: ObservableObject {
                 ? ascii!
                 : body.map { String(format: "%02x", $0) }.joined()
             serial = text.isEmpty ? "—" : text
-        } catch { statusMessage = "getSerial failed: \(describe(error))" }
+        } catch { statusMessage = String(localized: "getSerial failed: \(describe(error))") }
     }
 
     // MARK: - Helpers

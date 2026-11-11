@@ -34,7 +34,11 @@ struct RootView: View {
         }
         .onChange(of: settings.hasCompletedOnboarding) { _, done in
             // Fresh from onboarding → the Map (first-run hint → search → demo route), UX_DESIGN §5.1.
-            if done && library.pendingDetail == nil { router.tab = .map }
+            // A re-run from Settings › Connection mode left Settings pushed on the Halo tab: pop it,
+            // or the next visit to Halo would land there instead of on the cards.
+            guard done else { return }
+            router.haloPath = []
+            if library.pendingDetail == nil { router.tab = .map }
         }
         // Recovery wizard (UX_DESIGN §4.7): chip, Halo tab, Advanced, or a pairing that needs it.
         .fullScreenCover(isPresented: $router.showRecovery) {
@@ -45,12 +49,14 @@ struct RootView: View {
 
     private func openURL(_ url: URL) {
         guard url.isFileURL else { return }
-        do {
-            let saved = try library.importGPX(from: url, defaultSource: .shared)
-            router.tab = .routes
-            library.pendingDetail = saved.id
-        } catch {
-            openError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+        router.tab = .routes            // the Routes tab shows the import's progress
+        Task {
+            do {
+                let saved = try await library.importGPX(from: url, defaultSource: .shared)
+                library.pendingDetail = saved.id
+            } catch {
+                openError = String(localized: "Couldn't load GPX: \(error.localizedDescription)")
+            }
         }
     }
 }

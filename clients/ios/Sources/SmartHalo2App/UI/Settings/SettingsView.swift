@@ -72,6 +72,14 @@ struct SettingsView: View {
         } message: {
             Text("You'll be logged out and taken back to the welcome screen.")
         }
+        // On the Form, not on a Section: presentations attached to list sections are unreliable.
+        .sheet(isPresented: $showTapCode) {
+            TapCodeSheet(controller: isReady ? controller : nil)
+            .presentationBackground(Theme.surface2)
+            .environmentObject(settings)
+            .environmentObject(connection)
+            .haloTheme()
+        }
     }
 
     // MARK: My Halo
@@ -146,12 +154,6 @@ struct SettingsView: View {
             }
         }
         .listRowBackground(Theme.surface)
-        .sheet(isPresented: $showTapCode) {
-            TapCodeSheet(controller: isReady ? controller : nil)
-            .presentationBackground(Theme.surface2)
-            .environmentObject(settings)
-            .haloTheme()
-        }
     }
 
     // MARK: Alerts
@@ -337,6 +339,9 @@ struct RenameHaloView: View {
     @State private var failed = false
     @State private var busy = false
 
+    /// The nRF keeps this many bytes of the name and drops the rest.
+    static let maxNameBytes = 19
+
     var body: some View {
         Form {
             Section {
@@ -344,12 +349,16 @@ struct RenameHaloView: View {
                     .textInputAutocapitalization(.words)
                     .submitLabel(.done)
                     .onSubmit(save)
+                    .onChange(of: name) { _, new in
+                        let capped = Self.capped(new)
+                        if capped != new { name = capped }
+                    }
             } footer: {
                 if failed {
                     Text("Couldn't rename the Halo. Check it's connected and try again.")
                         .foregroundStyle(Theme.danger)
                 } else {
-                    Text("The new name is stored on the Halo itself.")
+                    Text("The new name is stored on the Halo itself, up to 19 characters.")
                 }
             }
             .listRowBackground(Theme.surface)
@@ -371,12 +380,25 @@ struct RenameHaloView: View {
         .onAppear { if name.isEmpty { name = connection.displayName ?? "" } }
     }
 
+    /// `name` cut to `maxNameBytes` of UTF-8 on a character boundary (accents and emoji take more
+    /// than one byte, so fewer of them fit).
+    static func capped(_ name: String) -> String {
+        var out = ""
+        for ch in name {
+            guard out.utf8.count + String(ch).utf8.count <= maxNameBytes else { break }
+            out.append(ch)
+        }
+        return out
+    }
+
     private func save() {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let trimmed = Self.capped(name.trimmingCharacters(in: .whitespaces))
         guard !trimmed.isEmpty else { return }
         busy = true
         failed = false
         Task {
+            // `renameDevice()` sends `deviceName`; if the ring refuses, the app shows the old name again.
+            let previous = controller.deviceName
             controller.deviceName = trimmed
             let ok = await controller.renameDevice()
             busy = false
@@ -384,6 +406,7 @@ struct RenameHaloView: View {
                 if !controller.isDemo { settings.myHaloName = trimmed }
                 dismiss()
             } else {
+                controller.deviceName = previous
                 failed = true
             }
         }

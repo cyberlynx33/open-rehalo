@@ -42,12 +42,42 @@ final class AuthStore: ObservableObject {
         }
     }
 
-    /// Re-fetch the account from the server (also a cheap connectivity check).
+    /// Re-fetch the account from the server (also a cheap connectivity check). An expired access
+    /// token is refreshed on the way; a session the server no longer accepts ends in a logout, so
+    /// the account isn't shown as connected when it isn't.
     func refreshProfile() async {
-        guard let url = AppSettings.shared.serverURL, let jwt = TokenStore.load(.access) else { return }
-        if let u = try? await SH2Server(baseURL: url).whoami(accessJWT: jwt) {
+        guard let url = AppSettings.shared.serverURL else { return }
+        do {
+            let u = try await authorized { jwt in try await SH2Server(baseURL: url).whoami(accessJWT: jwt) }
             user = u
             cache(u)
+        } catch {
+            // Offline or a server error: keep the cached account.
+        }
+    }
+
+    /// Run a call that needs the access token. On 401 the tokens are refreshed once with the refresh
+    /// token and the call retried; if the server rejects the refresh too, the session is over and
+    /// the account is logged out. Throws when nobody is logged in.
+    func authorized<T>(_ call: (String) async throws -> T) async throws -> T {
+        guard let access = TokenStore.load(.access) else { throw SH2ServerError.http(401, "not logged in") }
+        do {
+            return try await call(access)
+        } catch SH2ServerError.http(401, _) {
+            guard let url = AppSettings.shared.serverURL, let refresh = TokenStore.load(.refresh) else {
+                logout()
+                throw SH2ServerError.http(401, "session expired")
+            }
+            let tokens: SH2Tokens
+            do {
+                tokens = try await SH2Server(baseURL: url).refresh(refreshJWT: refresh)
+            } catch SH2ServerError.http(let code, _) where code == 401 || code == 403 {
+                logout()
+                throw SH2ServerError.http(code, "session expired")
+            }
+            TokenStore.save(tokens.access_jwt, .access)
+            TokenStore.save(tokens.refresh_jwt, .refresh)
+            return try await call(tokens.access_jwt)
         }
     }
 
