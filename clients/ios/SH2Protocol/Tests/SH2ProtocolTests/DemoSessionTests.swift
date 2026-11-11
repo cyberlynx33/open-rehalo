@@ -43,6 +43,52 @@ final class DemoSessionTests: XCTestCase {
         }
     }
 
+    /// Like `TinyMock`, but it records the requests it gets and holds the reply to the first one
+    /// until `releaseHeldReply()`, so that first request keeps the session's slot as long as a test
+    /// wants. Every reply is `[OK]`.
+    final class HoldingMock: Transport, @unchecked Sendable {
+        private let lock = NSLock()
+        private var acc = Data()
+        private var requests: [[UInt8]] = []
+        private var holding = true
+        private var held: [SH2Notification] = []
+        private let stream: AsyncStream<SH2Notification>
+        private let cont: AsyncStream<SH2Notification>.Continuation
+
+        init() {
+            var c: AsyncStream<SH2Notification>.Continuation!
+            stream = AsyncStream(bufferingPolicy: .unbounded) { c = $0 }
+            cont = c
+        }
+
+        func enableNotifications() async throws {}
+        func notificationStream() -> AsyncStream<SH2Notification> { stream }
+
+        func write(uuid: String, data: Data) async throws {
+            lock.lock(); defer { lock.unlock() }
+            let u = uuid.uppercased()
+            if Frame.UUIDs.payload.contains(u) { acc.append(data); return }
+            guard u == Frame.UUIDs.ctrl else { return }
+            let len = Int([UInt8](data).first ?? 0)
+            requests.append([UInt8](acc.prefix(len))); acc = Data()
+            guard let enc = try? Frame.encodeMessage(Data([ReturnCode.ok.rawValue]), cipher: nil) else { return }
+            var notes: [SH2Notification] = []
+            for (i, chunk) in enc.chunks.enumerated() where i < Frame.UUIDs.payload.count {
+                notes.append(SH2Notification(uuid: Frame.UUIDs.payload[i], data: chunk))
+            }
+            notes.append(SH2Notification(uuid: Frame.UUIDs.ctrl, data: enc.ctrl))
+            if holding { holding = false; held = notes } else { notes.forEach { cont.yield($0) } }
+        }
+
+        /// The requests received so far, as their app-data bytes.
+        var recorded: [[UInt8]] { lock.lock(); defer { lock.unlock() }; return requests }
+
+        func releaseHeldReply() {
+            lock.lock(); let notes = held; held = []; lock.unlock()
+            notes.forEach { cont.yield($0) }
+        }
+    }
+
     func testDemoAuthAndPlaintextRoundTrip() async throws {
         let session = Session(transport: TinyMock())
         try await session.open()
@@ -86,6 +132,36 @@ final class DemoSessionTests: XCTestCase {
             XCTAssertEqual(count, 1)
         }
         // The session is still usable afterwards.
+        let light = try await session.transceive(Commands.frontLight(on: true), crypted: false)
+        XCTAssertEqual([UInt8](light).first, ReturnCode.ok.rawValue)
+    }
+
+    /// A request whose task is cancelled while it waits its turn is not sent when the turn comes:
+    /// a screen that left, or a ride that ended, doesn't talk to the ring afterwards.
+    func testACancelledRequestWaitingItsTurnIsNotSent() async throws {
+        let mock = HoldingMock()
+        let session = Session(transport: mock)
+        try await session.open()
+        await session.authenticateForDemo()
+
+        let first = Task { try await session.transceive(Commands.getVersions(), crypted: false) }
+        // Once the first request is on the wire it holds the slot: its reply is held back.
+        for _ in 0..<200 where mock.recorded.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(mock.recorded.count, 1, "the first request should be on the wire")
+
+        let second = Task { try await session.transceive(Commands.frontLight(on: true), crypted: false) }
+        try await Task.sleep(for: .milliseconds(100))       // queued behind the first
+        second.cancel()
+        mock.releaseHeldReply()
+
+        _ = try await first.value
+        do {
+            _ = try await second.value
+            XCTFail("a request cancelled while waiting must not be sent")
+        } catch is CancellationError {}
+        XCTAssertEqual(mock.recorded, [[0, 0]], "only getVersions reached the transport")
+
+        // The slot was released on the way out: the session is still usable.
         let light = try await session.transceive(Commands.frontLight(on: true), crypted: false)
         XCTAssertEqual([UInt8](light).first, ReturnCode.ok.rawValue)
     }

@@ -217,6 +217,9 @@ public actor Session {
 
         await acquire()
         defer { release() }
+        // The caller's task may have been cancelled while this request waited its turn (a screen
+        // that left, a ride that ended): its command is stale, so it is not sent.
+        try Task.checkCancellation()
         if let terminal { throw terminal }
         // Encoded once it is our turn: the cipher may have been set by a handshake step ahead of us.
         let useCipher = (crypted ?? (cipher != nil)) ? cipher : nil
