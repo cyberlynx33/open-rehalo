@@ -802,8 +802,10 @@ final class DeviceController: ObservableObject {
     /// Settings › Advanced › Sound & touch keeps the rider's choice under this key; the ring isn't
     /// asked and may have rebooted since, so it is sent again on every connection.
     static let touchSoundsKey = "sh2.touchSounds"
+    /// Give the ring back the rider's touch-sound choice. Only a choice made in this app: with
+    /// none stored, the ring keeps whatever it has (its default, or the official app's setting).
     private func applyTouchSounds() async {
-        let on = UserDefaults.standard.object(forKey: Self.touchSoundsKey) as? Bool ?? true
+        guard let on = UserDefaults.standard.object(forKey: Self.touchSoundsKey) as? Bool else { return }
         await setTouchSounds(on: on)
     }
     func runTouchOnboarding() async { await run(Commands.touchOnboarding(), "touchOnboarding") }
