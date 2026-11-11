@@ -821,9 +821,8 @@ final class DeviceController: ObservableObject {
         var labels: String { commands.map(\.label).joined(separator: ", ") }
     }
     private var navPending: [NavBatch] = []
+    /// Drains `navPending`; `cancelNav()` cancels it, which also cuts short a delay it is sleeping.
     private var navWorker: Task<Void, Never>?
-    /// Bumped by `cancelNav()`: a batch whose delay started under an older epoch is abandoned.
-    private var navEpoch = 0
     /// Beyond this many waiting batches the oldest droppable ones go: with the ring slow to answer,
     /// the per-fix batches would otherwise pile up and the ring later drain positions long gone.
     private static let navPendingLimit = 4
@@ -856,12 +855,16 @@ final class DeviceController: ObservableObject {
 
     private func drainNav() async {
         while !navPending.isEmpty {
+            // Cancelled: cancelNav() has emptied the queue, and whatever it holds now belongs to
+            // the worker it started after. Leave `navWorker` to that one.
+            if Task.isCancelled { return }
             let batch = navPending.removeFirst()
-            let epoch = navEpoch
             for cmd in batch.commands {
                 if cmd.delay > 0 {
+                    // Ends early when cancelled: the arrival's 10 s `navOff` must not hold back
+                    // the next ride's intro.
                     try? await Task.sleep(for: .seconds(cmd.delay))
-                    if epoch != navEpoch { break }      // cancelled meanwhile: a new ride started
+                    if Task.isCancelled { return }
                 }
                 await run(cmd.data, cmd.label)
             }
@@ -873,7 +876,8 @@ final class DeviceController: ObservableObject {
     /// intro doesn't queue behind the previous ride's arrival sequence (a `navOff` 10 s later).
     func cancelNav() {
         navPending.removeAll()
-        navEpoch &+= 1
+        navWorker?.cancel()
+        navWorker = nil
     }
 
     // Device settings (M4)
