@@ -204,10 +204,15 @@ final class AppSettings: ObservableObject {
     }
 
     /// Hosts reached without TLS by default: the LAN, where a self-hosted `sh2-server` lives.
+    ///
+    /// Keep in step with App Transport Security in Info.plist: it exempts IP addresses, names
+    /// without a dot and `.local` on its own (`NSAllowsLocalNetworking`), and the other suffixes
+    /// here through `NSExceptionDomains`. A suffix listed here but not there would get `http://`
+    /// and then be refused by iOS.
     static func isLocalHost(_ host: String) -> Bool {
         let h = host.lowercased()
-        if h == "localhost" || h.hasSuffix(".local") || h.hasSuffix(".lan") || h.hasSuffix(".home")
-            || h.hasSuffix(".internal") { return true }
+        if h == "localhost" || !h.contains(".") || h.hasSuffix(".local") || h.hasSuffix(".lan")
+            || h.hasSuffix(".home") || h.hasSuffix(".internal") || h.hasSuffix(".home.arpa") { return true }
         let parts = h.split(separator: ".").compactMap { Int($0) }
         guard parts.count == 4 else { return false }
         return parts[0] == 10 || parts[0] == 127
