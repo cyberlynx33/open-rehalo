@@ -3,6 +3,7 @@ import SwiftUI
 /// Rides history pulled from the self-hosted server (`GET /api/v1/users/rides`).
 struct RidesView: View {
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var auth: AuthStore
     @State private var rides: [SH2PastRide] = []
     @State private var loading = false
     @State private var error: String?
@@ -41,12 +42,14 @@ struct RidesView: View {
     }
 
     private func load() async {
-        guard let url = AppSettings.shared.serverURL, let jwt = TokenStore.load(.access) else {
+        guard let url = AppSettings.shared.serverURL, TokenStore.load(.access) != nil else {
             error = String(localized: "Not signed in."); return
         }
         loading = true; error = nil
         defer { loading = false }
-        do { rides = try await SH2Server(baseURL: url).rides(accessJWT: jwt) }
+        // Through `authorized`: the access token lasts an hour, and an expired one is refreshed
+        // and the call retried instead of the list failing with a 401.
+        do { rides = try await auth.authorized { jwt in try await SH2Server(baseURL: url).rides(accessJWT: jwt) } }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription }
     }
 }
