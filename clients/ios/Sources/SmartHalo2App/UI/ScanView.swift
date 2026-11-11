@@ -54,7 +54,12 @@ struct ScanView: View {
                 .padding(.bottom, Theme.Space.s)
             }
         }
-        .onAppear { if central.state == .poweredOn && !central.isScanning { central.startScan() } }
+        .onAppear {
+            // Bluetooth starts on demand: this screen is the demand when no Halo is saved. The
+            // scan itself waits for `.poweredOn`, which the `onChange` below picks up.
+            central.activate()
+            if central.state == .poweredOn && !central.isScanning { central.startScan() }
+        }
         .onChange(of: central.state) { _, s in if s == .poweredOn { central.startScan() } }
         .onDisappear { central.stopScan() }
     }
