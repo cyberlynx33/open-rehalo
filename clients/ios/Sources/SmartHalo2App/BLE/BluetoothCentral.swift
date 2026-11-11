@@ -267,6 +267,13 @@ extension BluetoothCentral: CBCentralManagerDelegate {
             return
         }
         connectContinuation = nil
+        // A connect to a ring this iPhone already holds a link to completes at once. The new
+        // transport takes over the peripheral's delegate, so the old one would never hear another
+        // callback: fail its waits now instead of letting them run into their backstop timers.
+        if let old = activeTransport, old.peripheralID == peripheral.identifier {
+            SH2Log.log("central: replacing the transport of a ring already linked [\(peripheral.identifier.uuidString.prefix(8))]")
+            old.handleDisconnect()
+        }
         let transport = BluetoothTransport(peripheral: peripheral, queue: bleQueue)
         activeTransport = transport
         cont.resume(returning: transport)
