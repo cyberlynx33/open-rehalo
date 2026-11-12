@@ -1,12 +1,21 @@
-# Publishes the website to GitHub Pages (https://rehalo.app) from main.
+# Publishes the website to GitHub Pages (https://rehalo.app) from main, with the AltStore / SideStore
+# sources in /altstore/, built from the GitHub Releases (the .ipa files stay in the releases).
 # Needs Settings › Pages › Source set to "GitHub Actions" and the custom domain rehalo.app, once.
+# The iOS build runs this after it publishes a release or dev-latest. After editing a release's notes
+# by hand, run it again: gh workflow run pages.yml
 name: Website
 
 on:
   push:
     branches: [main]
-    paths: ['site/**', '.github/workflows/pages.yml']
+    paths:
+      - 'site/**'
+      - 'docs/screenshots/**'
+      - 'clients/ios/Sources/SmartHalo2App/Assets.xcassets/AppIcon.appiconset/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch: {}
+  # No `release` trigger: it would run on the tag, which the github-pages environment doesn't accept,
+  # and would publish the website as it was at that tag.
 
 permissions:
   contents: read
@@ -26,6 +35,11 @@ jobs:
 
       - name: Build the website
         run: site/test/build-static.sh
+
+      - name: Build the AltStore sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node site/altstore/build-source.mjs --out dist/site/altstore
 
       - uses: actions/configure-pages@v5
 

@@ -207,6 +207,9 @@ details { border-top: 1px solid var(--stroke); }
 details:last-of-type { border-bottom: 1px solid var(--stroke); }
 summary { cursor: pointer; padding: 14px 0; font-weight: 600; }
 details p { color: var(--dim); padding-bottom: 16px; }
+details code { font-family: var(--mono); font-size: .92em; color: var(--text); overflow-wrap: anywhere; }
+.source { display: grid; gap: 10px; padding-bottom: 20px; }
+.source p { padding-bottom: 0; }
 .foot { display: grid; gap: 10px; padding: 36px var(--gutter) 48px; border-top: 1px solid var(--stroke); color: var(--dim); font-size: .85rem; }
 .foot img { height: 22px; width: auto; margin-bottom: 6px; }
 .foot p { max-width: 62em; }
