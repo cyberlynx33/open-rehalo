@@ -207,6 +207,7 @@ details { border-top: 1px solid var(--stroke); }
 details:last-of-type { border-bottom: 1px solid var(--stroke); }
 summary { cursor: pointer; padding: 14px 0; font-weight: 600; }
 details p { color: var(--dim); padding-bottom: 16px; }
+.faq-figure { width: 340px; height: auto; margin-bottom: 20px; }
 details code { font-family: var(--mono); font-size: .92em; color: var(--text); overflow-wrap: anywhere; }
 .source { display: grid; gap: 10px; padding-bottom: 20px; }
 .source p { padding-bottom: 0; }
