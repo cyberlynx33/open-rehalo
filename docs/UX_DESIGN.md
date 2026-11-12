@@ -315,10 +315,10 @@ Opens when the handshake indicates the Halo needs re-pairing (`.needsRecovery`).
 ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
 │ Recover your Halo    │  │ Restart the Halo     │  │ ✓ Done               │
 │                      │  │                      │  │                      │
-│ This Halo has an     │  │ (illustration: take  │  │ Your Halo is yours   │
-│ old password. We'll  │  │  off and put back on │  │ again. The new key   │
-│ generate a new one   │  │  the mount / button) │  │ was saved in the     │
-│ and save it in your  │  │                      │  │ Keychain.            │
+│ This Halo has an     │  │ (illustration: a     │  │ Your Halo is yours   │
+│ old password. We'll  │  │  micro-USB cable     │  │ again. The new key   │
+│ generate a new one   │  │  plugs in underneath │  │ was saved in the     │
+│ and save it in your  │  │  and out, on a loop) │  │ Keychain.            │
 │ Keychain.            │  │ ◌ Waiting for Halo…  │  │                      │
 │                      │  │                      │  │                      │
 │ [   Recover   ]      │  │ [ I've rebooted it ] │  │ [   Continue   ]     │

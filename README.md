@@ -101,9 +101,13 @@ Use a real iPhone: the simulator has no Bluetooth, though demo mode works there.
 ### Reclaiming your ring
 
 Open the app, pick your SmartHalo and follow the recovery wizard. The ring has to reboot once, because
-a firmware quirk keeps the old password in memory until the next boot. You can drain the battery and
-recharge it, or disconnect the battery if you're comfortable opening the case. There is no reboot over
-Bluetooth: the firmware refuses it unless an app is already paired. Use this only on your own device.
+a firmware quirk keeps the old password in memory until the next boot. Plug a micro-USB cable into the
+bottom of the ring and unplug it again: the ring restarts when power comes in. If that doesn't work,
+drain the battery and recharge it, or disconnect the battery if you're comfortable opening the case.
+There is no reboot over Bluetooth: the firmware refuses it unless an app is already paired. Use this
+only on your own device.
+
+<p align="center"><img src="docs/img/usb-reboot.svg" alt="A micro-USB cable plugs into the bottom of the Halo, and its ring runs the charging animation" width="340"></p>
 
 <table>
   <tr>
@@ -113,7 +117,7 @@ Bluetooth: the firmware refuses it unless an app is already paired. Use this onl
   </tr>
   <tr>
     <td align="center"><b>1. Recover your Halo</b><br><sub>Un-pairs the ring and creates a new password, saved in your Keychain.</sub></td>
-    <td align="center"><b>2. Reboot the Halo</b><br><sub>Disconnect the battery or let it drain. The app notices when the ring is back.</sub></td>
+    <td align="center"><b>2. Reboot the Halo</b><br><sub>Plug a micro-USB cable in and out again. The app notices when the ring is back.</sub></td>
     <td align="center"><b>3. Done</b><br><sub>The ring is paired with this iPhone again.</sub></td>
   </tr>
 </table>

@@ -7,15 +7,19 @@ If the ring does advertise, you don't need this: use the recovery wizard in the 
 
 ## Your options
 
-This is one option, next to two simpler ones:
+This is one option, next to three simpler ones:
 
-1. **Drain the battery** and recharge it. No tools needed.
-2. **Disconnect the battery** for about 10 s and reconnect it. You have to open the case, but there's
+1. **Plug in a micro-USB cable** on the bottom of the ring and unplug it again. The ring restarts when
+   power comes in. No tools needed.
+2. **Drain the battery** and recharge it. No tools needed either, but it takes a while.
+3. **Disconnect the battery** for about 10 s and reconnect it. You have to open the case, but there's
    no soldering.
-3. **Use the UART console**, described here. It needs soldering, but it lets you delete the saved state
+4. **Use the UART console**, described here. It needs soldering, but it lets you delete the saved state
    directly.
 
-Try the first two before opening a serial console. If a reboot doesn't bring Bluetooth back, the saved
+<p align="center"><img src="img/usb-reboot.svg" alt="A micro-USB cable plugs into the bottom of the Halo, and its ring runs the charging animation" width="340"></p>
+
+Try the first three before opening a serial console. If a reboot doesn't bring Bluetooth back, the saved
 state below is the likely reason.
 
 ## Why a ring can stop advertising
