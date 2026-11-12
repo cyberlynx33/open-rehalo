@@ -1157,6 +1157,40 @@
         }
       }
     },
+    "Plug a charging cable into the port on the bottom of the Halo, then unplug it. The Halo restarts when power comes in." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plug a charging cable into the port on the bottom of the Halo, then unplug it. The Halo restarts when power comes in."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enchufa un cable de carga en el puerto de la parte de abajo del Halo y vuelve a desenchufarlo. El Halo se reinicia al recibir corriente."
+          }
+        }
+      }
+    },
+    "Plug in a micro-USB cable — easiest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plug in a micro-USB cable — easiest"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enchufar un cable micro-USB (lo más fácil)"
+          }
+        }
+      }
+    },
     "Recap" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6087,19 +6121,19 @@
         }
       }
     },
-    "The Halo is un-paired. Due to a firmware quirk it keeps its old password until it restarts once: disconnect and reconnect the battery, or let it drain. Wait here — we'll notice when it comes back." : {
+    "The Halo is un-paired. Due to a firmware quirk it keeps its old password until it restarts once: plug a micro-USB cable into the bottom of the Halo and unplug it again. Wait here — we'll notice when it comes back." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The Halo is un-paired. Due to a firmware quirk it keeps its old password until it restarts once: disconnect and reconnect the battery, or let it drain. Wait here — we'll notice when it comes back."
+            "value" : "The Halo is un-paired. Due to a firmware quirk it keeps its old password until it restarts once: plug a micro-USB cable into the bottom of the Halo and unplug it again. Wait here — we'll notice when it comes back."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El Halo ya está desemparejado. Por una peculiaridad del firmware conserva la contraseña antigua hasta que se reinicia una vez: desconecta y vuelve a conectar la batería, o deja que se agote. Espera aquí: detectaremos cuándo vuelve."
+            "value" : "El Halo ya está desemparejado. Por una peculiaridad del firmware conserva la contraseña antigua hasta que se reinicia una vez: enchufa un cable micro-USB en la parte de abajo del Halo y vuelve a desenchufarlo. Espera aquí: detectaremos cuándo vuelve."
           }
         }
       }
