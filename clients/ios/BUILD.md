@@ -15,7 +15,13 @@ Download the artifact from the **iOS build** run in the **Actions** tab (GitHub 
 zip, and `gh run download <run-id> -n rehalo-unsigned-ipa` unpacks it for you). A push to `dev` also
 publishes the `.ipa` as the rolling **`dev-latest`** prerelease, with a direct link:
 `https://github.com/cyberlynx33/open-rehalo/releases/download/dev-latest/rehalo-unsigned.ipa`. A manual
-run of the workflow can publish any branch there with its *publish_dev_latest* option. An unsigned
+run of the workflow can publish any branch there with its *publish_dev_latest* option.
+
+Build numbers: a `v*` tag keeps `CURRENT_PROJECT_VERSION` from `project.yml`, and every other build
+appends its run number to it (`2` becomes `2.45`). AltStore and SideStore offer an update when the build
+differs from the installed one, so each `dev-latest` build is a new version for them. After publishing a
+release or `dev-latest`, the workflow runs **Website**, which rebuilds the sources at
+`https://rehalo.app/altstore/` from the releases (`site/altstore/build-source.mjs`). An unsigned
 `.ipa` has to be signed with your own Apple ID before it installs on an iPhone; see the main README. CI
 needs no Apple account.
 

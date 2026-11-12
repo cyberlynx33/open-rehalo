@@ -1,0 +1,40 @@
+{
+  "comment": "What build-source.mjs can't read from the releases: the two sources and the app's store page. Image paths are relative to the folder the sources are published in.",
+  "sources": {
+    "stable": {
+      "file": "apps.json",
+      "name": "rehalo",
+      "identifier": "app.rehalo",
+      "subtitle": "The numbered releases of rehalo",
+      "description": "rehalo is an independent, open-source iPhone app for the SmartHalo 2 bike light. This source has the numbered releases."
+    },
+    "dev": {
+      "file": "apps-dev.json",
+      "name": "rehalo (dev)",
+      "identifier": "app.rehalo.dev",
+      "subtitle": "Development builds of rehalo",
+      "description": "The newest development build of rehalo, rebuilt on every change to the dev branch, plus the numbered releases. Expect rough edges. Add this source or the stable one, not both: they offer the same app.",
+      "withDevBuild": true
+    }
+  },
+  "website": "https://rehalo.app",
+  "tintColor": "C6FF3D",
+  "iconURL": "icon.png",
+  "app": {
+    "name": "rehalo",
+    "bundleIdentifier": "com.sh2.smarthalo2",
+    "developerName": "rehalo (open source)",
+    "subtitle": "Use your SmartHalo 2 again",
+    "localizedDescription": "rehalo is an independent, open-source iPhone app that lets you use your SmartHalo 2 bike light again, without the original app. No account and no company servers.\n\n• Navigation: import a GPX route or search for a place, and get turn guidance on the ring, with a Live Activity on the Lock Screen.\n• Alarm: arms when you leave and disarms when your iPhone returns, with a five-tap code on the ring.\n• Ring cards and tap shortcuts: clock, battery, speed, distance, ride time, the horn and the light.\n• Front light, call alerts and optional rain alerts.\n• Ring recovery: reclaim a ring that was paired to the old app.\n• Demo mode: try everything without a ring.\n\nNeeds iOS 17 or later and a real iPhone.",
+    "iconURL": "icon.png",
+    "tintColor": "C6FF3D",
+    "category": "utilities",
+    "screenshots": ["screenshots/map.png", "screenshots/routes.png", "screenshots/halo.png"]
+  },
+  "files": {
+    "icon.png": "clients/ios/Sources/SmartHalo2App/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+    "screenshots/map.png": "docs/screenshots/map.png",
+    "screenshots/routes.png": "docs/screenshots/routes.png",
+    "screenshots/halo.png": "docs/screenshots/halo.png"
+  }
+}
