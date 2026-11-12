@@ -4,7 +4,7 @@ import SwiftUI
 /// alarm controls moved to the Halo tab card and Settings › Alarm). Post-MVP: own redesigned screen.
 struct SoundTouchView: View {
     @ObservedObject var controller: DeviceController
-    @AppStorage("sh2.touchSounds") private var touchSounds = true
+    @AppStorage(DeviceController.touchSoundsKey) private var touchSounds = true
 
     var body: some View {
         List {

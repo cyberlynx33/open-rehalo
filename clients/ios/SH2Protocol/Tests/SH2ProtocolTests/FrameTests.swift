@@ -44,6 +44,23 @@ final class FrameTests: XCTestCase {
         XCTAssertThrowsError(try Frame.encodeMessage(Data(repeating: 1, count: Frame.maxMessage), cipher: cipher))
     }
 
+    func testAnEmptyCtrlIsAnError() {
+        XCTAssertThrowsError(try Frame.decodeReply(ctrl: Data(), payloadAccum: Data([0]), cipher: nil)) { error in
+            guard case Frame.FrameError.malformedCtrl = error else { return XCTFail("\(error)") }
+        }
+    }
+
+    func testACtrlLongerThanThePayloadIsAnError() {
+        // CTRL says 69 bytes, only 3 arrived (a lost chunk): not a 3-byte reply.
+        XCTAssertThrowsError(try Frame.decodeReply(ctrl: Data([69, 0]), payloadAccum: Data([0, 1, 2]), cipher: nil)) { error in
+            guard case Frame.FrameError.truncatedReply(let expected, let got) = error else { return XCTFail("\(error)") }
+            XCTAssertEqual(expected, 69)
+            XCTAssertEqual(got, 3)
+        }
+        // Extra bytes beyond `len` are ignored, as before.
+        XCTAssertEqual(try Frame.decodeReply(ctrl: Data([2, 0]), payloadAccum: Data([0, 1, 2]), cipher: nil), Data([0, 1]))
+    }
+
     func testUUIDsAreFull128Bit() {
         XCTAssertEqual(Frame.UUIDs.service, "92540000-D6ED-4617-A4B4-D749F57710CE")
         XCTAssertEqual(Frame.UUIDs.ctrl, "92540001-D6ED-4617-A4B4-D749F57710CE")

@@ -4,20 +4,24 @@ import SwiftUI
 /// so a per-ride GPX export / map isn't possible from this payload (documented deferral).
 struct RideDetailView: View {
     let ride: SH2PastRide
+    @EnvironmentObject private var settings: AppSettings
+
+    private var fmt: UnitFormat { settings.unitFormat }
 
     var body: some View {
         List {
+            // The server reports metres, seconds and km/h; shown in the rider's units.
             Section("Summary") {
                 stat("Date", ride.start ?? ride.stamp ?? ride.createdAt)
-                stat("Distance", ride.distance.map { String(format: "%.2f km", $0 / 1000) })
-                stat("Duration", ride.duration.map(formatDuration))
-                stat("Avg speed", ride.averageSpeed.map { String(format: "%.1f km/h", $0) })
-                stat("Elevation", ride.elevation.map { String(format: "%.0f m", $0) })
-                stat("Calories", ride.calories.map { String(format: "%.0f kcal", $0) })
-                stat("CO₂ saved", ride.co2.map { String(format: "%.0f g", $0) })
+                stat("Distance", ride.distance.map { fmt.distance($0) })
+                stat("Duration", ride.duration.map { RideClock.string($0) })
+                stat("Avg speed", ride.averageSpeed.map { fmt.speed($0 / 3.6) })
+                stat("Elevation gain", ride.elevation.map { fmt.elevation($0) })
+                stat("Calories", ride.calories.map { Self.whole($0, UnitEnergy.kilocalories) })
+                stat("CO₂ saved", ride.co2.map { Self.whole($0, UnitMass.grams) })
             }
             Section {
-                Text("GPX export isn't available: the server ride summary doesn't include the track. Use Navigation → Import GPX to follow routes.")
+                Text("GPX export isn't available: the server's ride summary has no track. To follow routes, import a GPX in Routes.")
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
@@ -25,13 +29,14 @@ struct RideDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    @ViewBuilder private func stat(_ label: String, _ value: String?) -> some View {
+    @ViewBuilder private func stat(_ label: LocalizedStringKey, _ value: String?) -> some View {
         if let value, !value.isEmpty { LabeledContent(label, value: value) }
     }
 
-    private func formatDuration(_ secs: Double) -> String {
-        let s = Int(secs)
-        let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
-        return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
+    /// "320 kcal", "150 g": the unit as given, no decimals, in the locale's format.
+    private static func whole<U: Dimension>(_ value: Double, _ unit: U) -> String {
+        Measurement(value: value, unit: unit)
+            .formatted(.measurement(width: .abbreviated, usage: .asProvided,
+                                    numberFormatStyle: .number.precision(.fractionLength(0))))
     }
 }

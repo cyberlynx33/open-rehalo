@@ -163,6 +163,36 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(director.guidance?.hasReachedOrigin, true)
     }
 
+    /// Fixes every 5 m from `a` to `b` (north, east), `b` included and `a` left out.
+    func leg(_ a: (Double, Double), _ b: (Double, Double)) -> [NavLocation] {
+        let n = max(1, Int((hypot(b.0 - a.0, b.1 - a.1) / 5).rounded()))
+        return (1...n).map {
+            let t = Double($0) / Double(n)
+            return point(north: a.0 + (b.0 - a.0) * t, east: a.1 + (b.1 - a.1) * t)
+        }
+    }
+
+    /// Back to a corner from the north-north-west after a detour: the first fix east of the route's
+    /// line puts the nearest point on the next stretch, within 5 m of the corner. One step on, not
+    /// two (the second skipped the stretch and left the rider "off route" while riding it).
+    func testReturningToACornerMovesOneStepOn() {
+        var route: [NavLocation] = (0...20).map { point(north: Double($0) * 10, east: 0, accuracy: 0) }
+        route += (1...20).map { point(north: 200, east: Double($0) * 10, accuracy: 0) }
+        route += (1...20).map { point(north: 200 + Double($0) * 10, east: 200, accuracy: 0) }
+        route += (1...20).map { point(north: 400, east: 200 + Double($0) * 10, accuracy: 0) }
+        var director = NavDirector(points: route, title: "Office")
+        XCTAssertEqual(director.steps.count, 5)
+        _ = director.start(ringConnected: true)
+        let ride = leg((0, 0), (100, 0)) + leg((100, 0), (100, -60)) + leg((100, -60), (300, -60))
+            + leg((300, -60), (300, -30)) + leg((300, -30), (195, 10))
+        var steps: [Int] = []
+        for fix in ride {
+            _ = director.update(fix)
+            if let i = director.guidance?.currentStepIndex, i != steps.last { steps.append(i) }
+        }
+        XCTAssertEqual(steps, [0, 1])
+    }
+
     // MARK: - Routed destinations (not in the official app)
 
     /// A routed destination's instruction near the corner replaces "Turn right" on the OLED.
@@ -190,6 +220,11 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(NavDirector.shortInstruction("Gira a la izquierda en Calle de Alcalá."), "Calle de Alcalá")
         XCTAssertEqual(NavDirector.shortInstruction("Turn left"), "Turn left")
         XCTAssertEqual(NavDirector.shortInstruction("Gira a la derecha"), "Gira a la derecha")
+        // "Toward X" is where the road leads: the road wins, and it's cut off the road's name.
+        XCTAssertEqual(NavDirector.shortInstruction("Head south on US-101 toward San Jose"), "US-101")
+        XCTAssertEqual(NavDirector.shortInstruction("Turn right onto Main St toward Downtown"), "Main St")
+        XCTAssertEqual(NavDirector.shortInstruction("Continue toward Place de la Concorde"), "Place de la Concorde")
+        XCTAssertEqual(NavDirector.shortInstruction("Incorpórate a Avinguda Diagonal hacia Sants"), "Avinguda Diagonal")
     }
 
     /// "Start at the nearest step": joining the second stretch skips the pointer back to the start.
@@ -211,6 +246,23 @@ final class NavigationTests: XCTestCase {
         XCTAssertFalse(nearest.labels.contains("navPointer"))
         // From the start: off the route, so the ring first waits for a direction to point back.
         XCTAssertEqual(ride(nearest: false).labels.first, "navPointerStandby")
+    }
+
+    /// Matched engine: while the matcher waits to rejoin, the guidance doesn't compute the pointer.
+    /// The direction of travel appearing on one of those fixes must not send the 999 placeholder as
+    /// an angle: the ring keeps "ride to calibrate" until there is one.
+    func testRejoiningKeepsRideToCalibrateUntilThePointerHasAnAngle() {
+        var director = NavDirector(points: lRoute(), title: "Office")
+        director.enableMatching(stepAlong: [0, 200, 400])
+        let match = NavMatch(status: .rejoining, target: point(north: 0, east: 0), along: 0, distance: 30,
+                             confident: false, unambiguous: true)
+        var labels: [String] = []
+        for i in 0...8 {
+            labels += director.update(point(north: 0, east: -40 + Double(i) * 5), match: match).commands.map(\.label)
+        }
+        XCTAssertNotEqual(director.guidance?.bearing.crowFlies, NavBearing.unknown)
+        XCTAssertFalse(labels.isEmpty)
+        XCTAssertTrue(labels.allSatisfy { $0 == "navPointerStandby" })
     }
 
     // MARK: - As the crow flies
@@ -245,5 +297,16 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(r.commands.map(\.label), ["navPointer"])
         let b = [UInt8](r.commands[0].data)
         XCTAssertEqual(Int(Int16(bitPattern: UInt16(b[5]) << 8 | UInt16(b[6]))), -90)
+    }
+
+    /// The iPhone's heading runs 0…360: facing 1° west of north, a destination at bearing 163° is 164°
+    /// to the right, not −196° (and never the −540° a GPS heading, in −180…180, can't produce).
+    func testCompassPhoneHeadingWrapsRoundNorth() {
+        var compass = CompassDirector(destination: point(north: -1000, east: 300), title: "Area 51")
+        let r = compass.update(point(north: 0, east: 0), heading: 359)
+        XCTAssertEqual(r.commands.map(\.label), ["navPointer"])
+        let b = [UInt8](r.commands[0].data)
+        let angle = Int(Int16(bitPattern: UInt16(b[5]) << 8 | UInt16(b[6])))
+        XCTAssertLessThanOrEqual(abs(angle - 164), 1)
     }
 }

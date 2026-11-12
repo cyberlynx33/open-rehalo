@@ -207,6 +207,22 @@ final class RouteMatcherTests: XCTestCase {
         }
     }
 
+    /// "Start at the nearest point" on a loop: the ride is what is left from there, so joining at 70 %
+    /// and riding to the end arrives there, without the half of the whole loop a ride from its start needs.
+    func testJoiningALoopAtItsNearestPointArrivesAtItsEnd() {
+        let route = RideSim.route([(0, 0), (500, 0), (500, 500), (0, 500), (0, 0)])
+        for seed in seeds {
+            var sim = RideSim(seed: seed, sigma: 5)
+            var m = RouteMatcher(route: route, joinNearest: true)
+            var arrivedAt: Double?
+            for (fix, truth) in sim.ride(route, from: 1400) where arrivedAt == nil {
+                if m.update(fix).arrived { arrivedAt = truth }
+            }
+            XCTAssertNotNil(arrivedAt, "seed \(seed)")
+            XCTAssertGreaterThan(arrivedAt ?? 0, route.length - 75, "seed \(seed)")
+        }
+    }
+
     func testTwoLapCircuitArrivesAfterTheSecondLap() {
         let lap: [(Double, Double)] = [(0, 0), (300, 0), (300, 300), (0, 300), (0, 0)]
         let route = RideSim.route(lap + lap.dropFirst())
@@ -494,6 +510,34 @@ final class MatchedEngineTests: XCTestCase {
         XCTAssertFalse(e.snapshot.offRoute)
     }
 
+    /// Under ~12.6 km/h consecutive fixes are under 3.5 m apart and `NavBearing` never gets a direction:
+    /// the official flow then never says "off route". The matched engine says so anyway, with the
+    /// pointer on the matcher's own direction of travel.
+    func testSlowRiderOffRouteIsShownWithoutAGPSHeading() {
+        let route = RideSim.route([(0, 0), (0, 1000)])
+        let away = RideSim.route([(0, 200), (300, 500)])        // north-east, the route behind to the left
+        var sim = RideSim(seed: 1, sigma: 0)
+        var e = engine(route)
+        for (fix, _) in sim.ride(route, to: 200, speed: 2.5) { _ = e.update(fix) }
+        XCTAssertFalse(e.snapshot.offRoute)
+        var labels: [String] = []
+        var angles: [Int] = []
+        for (fix, _) in sim.ride(away, speed: 2.5) {
+            let r = e.update(fix)
+            labels += r.commands.map(\.label)
+            angles += r.commands.filter { $0.label == "navPointer" }.map {
+                let b = [UInt8]($0.data)
+                return Int(Int16(bitPattern: UInt16(b[5]) << 8 | UInt16(b[6])))
+            }
+        }
+        XCTAssertEqual(e.director?.guidance?.bearing.crowFlies, NavBearing.unknown)
+        XCTAssertTrue(e.snapshot.offRoute)
+        XCTAssertNotNil(e.snapshot.offRouteBearing)
+        XCTAssertTrue(labels.contains("navPointer"))
+        XCTAssertTrue(angles.allSatisfy { $0 <= -60 && $0 >= -180 })
+        XCTAssertLessThanOrEqual(abs((angles.last ?? 0) + 135), 25)
+    }
+
     func testMissedTurnThenBackToIt() {
         // North 400 then east; the rider overshoots the corner by 100 m, comes back and turns.
         let route = RideSim.route([(0, 0), (0, 400), (400, 400)])
@@ -616,6 +660,35 @@ final class MatchedEngineTests: XCTestCase {
         XCTAssertFalse(labels.contains("navPointer"))       // no "Return to route" flash
     }
 
+    /// "Invert route" places the guidance where the rider is (here the reversed route's last stretch),
+    /// not at the route's first turn with the step sync catching up a few fixes later.
+    func testInvertingPlacesTheGuidanceAtTheRidersStep() {
+        // North 300, east 300, north 1200. The rider rides 250 m up the first stretch, turns back and
+        // rides it the wrong way; inverted, that stretch is the last one before the destination.
+        let route = RideSim.route([(0, 0), (0, 300), (300, 300), (300, 1500)])
+        var sim = RideSim(seed: 11, sigma: 5)
+        var e = engine(route)
+        for (fix, _) in sim.ride(route, to: 250, speed: 5) { _ = e.update(fix) }
+        var at = 250.0
+        for (fix, truth) in sim.ride(route, from: 250, to: 50, speed: 5) where e.snapshot.wrongWay != true {
+            _ = e.update(fix)
+            at = truth
+        }
+        XCTAssertEqual(e.snapshot.wrongWay, true)
+        e = try! XCTUnwrap(e.inverted()).engine
+        let last = (e.director?.steps.count ?? 0) - 2
+        XCTAssertEqual(e.director?.guidance?.currentStepIndex, last)
+        XCTAssertEqual(e.snapshot.nextTurn, .arrival)
+        XCTAssertGreaterThan(e.snapshot.nextTurnDistance, 50)
+        var labels: [String] = []
+        for (fix, _) in sim.ride(route, from: at - 5, to: at - 25, speed: 5) {
+            labels += e.update(fix).commands.map(\.label)
+            XCTAssertEqual(e.director?.guidance?.currentStepIndex, last)
+            XCTAssertFalse(e.snapshot.offRoute)
+        }
+        XCTAssertFalse(labels.contains("navPointer"))
+    }
+
     func testRoutedDestinationCannotBeInverted() {
         let route = RideSim.route([(0, 0), (0, 1500)])
         let e = RideEngine(route: route, title: "Test", settings: .init(),
@@ -664,5 +737,28 @@ final class MatchedEngineTests: XCTestCase {
         XCTAssertFalse(entry.contains("\"match\""))
         XCTAssertFalse(entry.contains("wrongWay"))
         XCTAssertTrue(String(decoding: record(.matched).lines[1], as: UTF8.self).contains("\"match\""))
+    }
+}
+
+/// The wrong-way state machine on its own inputs.
+final class WrongWayDetectorTests: XCTestCase {
+
+    func input(_ t: Double, speed: Double = 5, along: Double, odometer: Double, cos: Double?) -> WrongWayDetector.Input {
+        WrongWayDetector.Input(time: t, speed: speed, onRoute: true, eligible: true, along: along, odometer: odometer,
+                               cos: cos, otherLeg: false, courseCos: nil)
+    }
+
+    /// A suspicion (the movement opposes the route, but along isn't dropping) holds the step and not
+    /// the arrival, and a stop drops it: stopped, it could be neither confirmed nor cleared.
+    func testASuspicionEndsWhenTheRiderStopsAndIsNoWarning() {
+        var d = WrongWayDetector()
+        for i in 0..<30 { d.update(input(Double(i), along: Double(i) * 5, odometer: Double(i) * 5, cos: 1)) }
+        XCTAssertEqual(d.state, .none)
+        for i in 30..<34 { d.update(input(Double(i), along: 150, odometer: 150 + Double(i - 30) * 2, cos: -0.9)) }
+        XCTAssertEqual(d.state, .suspected)
+        XCTAssertTrue(d.isActive)
+        XCTAssertFalse(d.isWarning)
+        for i in 34..<37 { d.update(input(Double(i), speed: 0, along: 150, odometer: 156, cos: nil)) }
+        XCTAssertEqual(d.state, .none)
     }
 }

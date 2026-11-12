@@ -15,19 +15,21 @@ enum MapOrientation: String {
 struct OrientationButton: View {
     let orientation: MapOrientation
     var mapHeading: Double = 0
+    /// Button diameter (`MapRoundButton.size`); Navigating uses the riding target.
+    var size: CGFloat = 48
     let action: () -> Void
 
     var body: some View {
         switch orientation {
         case .north:
             MapRoundButton(systemImage: "location.north.line.fill", label: "Switch to compass",
-                           action: action)
+                           size: size, action: action)
         case .compass:
             MapRoundButton(systemImage: "safari.fill", label: "Switch to north up", isOn: true,
-                           action: action)
+                           size: size, action: action)
         case .free:
             MapRoundButton(systemImage: "location.north.fill", label: "Turn the map north up",
-                           rotation: -mapHeading, action: action)
+                           rotation: -mapHeading, size: size, action: action)
         }
     }
 }

@@ -72,8 +72,8 @@ struct NavigatingView: View {
     }
 
     private var map: some View {
-        NavMap(follow: follow, route: guidance.route, startHeading: guidance.heading,
-               orientation: $orientation, freeHeading: $freeHeading)
+        NavMap(follow: follow, route: guidance.route, routeRevision: guidance.routeRevision,
+               startHeading: guidance.heading, orientation: $orientation, freeHeading: $freeHeading)
     }
 
     private func feedFix() {
@@ -94,6 +94,12 @@ struct NavigatingView: View {
         if o != .free { settings.navOrientation = o }
     }
 
+    private func openSystemSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+
     // MARK: Top: turn banner + notices + compass
 
     private var topArea: some View {
@@ -110,6 +116,13 @@ struct NavigatingView: View {
                 NoticeBanner(systemImage: "antenna.radiowaves.left.and.right.slash",
                              text: "Halo disconnected. Guidance continues on the phone.")
             }
+            if guidance.locationDenied && !guidance.simulated {
+                // Permission withdrawn mid-ride (or the ride was started without it): no fix will
+                // ever come, so say so instead of "Waiting for GPS…" for good.
+                NoticeBanner(systemImage: "location.slash",
+                             text: "Location is off. Enable it in Settings to navigate.",
+                             actionTitle: "Open Settings", action: openSystemSettings)
+            }
             if guidance.wrongWay {
                 WrongWayBanner(canInvert: guidance.canInvert,
                                invert: { guidance.invert() },
@@ -125,11 +138,12 @@ struct NavigatingView: View {
                 }
                 Spacer(minLength: 0)
                 VStack(spacing: Theme.Space.s) {
+                    // Riding targets (UX_DESIGN §6: 56 pt), unlike the Map tab's 48 pt column.
                     OrientationButton(orientation: orientation, mapHeading: freeHeading,
-                                      action: toggleOrientation)
+                                      size: Theme.minTargetRiding, action: toggleOrientation)
                     if orientation == .free {
                         MapRoundButton(systemImage: "location.fill", label: "Center on my position",
-                                       action: recenter)
+                                       size: Theme.minTargetRiding, action: recenter)
                     }
                 }
             }
@@ -261,6 +275,9 @@ struct NavigatingView: View {
 private struct NavMap: View {
     @ObservedObject var follow: FollowCamera
     let route: GPXRoute?
+    /// `GPXRoute ==` is by id: an inverted route keeps its id, so this is what tells SwiftUI the
+    /// layers below (polyline, start and finish markers) must be rebuilt.
+    let routeRevision: Int
     let startHeading: Double
     @Binding var orientation: MapOrientation
     @Binding var freeHeading: Double
@@ -424,16 +441,24 @@ struct RouteProgressBar: View {
     }
 }
 
-/// Non-blocking warning strip (e.g. Halo dropped mid-ride).
+/// Non-blocking warning strip (e.g. Halo dropped mid-ride), with an optional trailing action.
 struct NoticeBanner: View {
     let systemImage: String
     let text: LocalizedStringKey
+    var actionTitle: LocalizedStringKey? = nil
+    var action: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
             Image(systemName: systemImage).font(.subheadline.weight(.semibold))
             Text(text).font(.subheadline.weight(.semibold))
             Spacer(minLength: 0)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Theme.text)
+                    .frame(minHeight: Theme.minTarget)
+            }
         }
         .foregroundStyle(Theme.warn)
         .padding(.horizontal, Theme.Space.l)
@@ -444,7 +469,8 @@ struct NoticeBanner: View {
             RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
                 .strokeBorder(Theme.warn.opacity(0.6), lineWidth: 1)
         )
-        .accessibilityElement(children: .combine)
+        // With a button inside, the parts stay separate elements so VoiceOver can reach it.
+        .accessibilityElement(children: action == nil ? .combine : .contain)
     }
 }
 
@@ -472,8 +498,8 @@ struct WrongWayBanner: View {
                         Label("Invert route", systemImage: "arrow.left.arrow.right")
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(Theme.onAccent)
-                            .padding(.horizontal, Theme.Space.m)
-                            .frame(minHeight: 44)
+                            .padding(.horizontal, Theme.Space.l)
+                            .frame(minHeight: Theme.minTargetRiding)
                             .background(Theme.warn, in: Capsule())
                     }
                     .buttonStyle(.plain)
@@ -482,8 +508,8 @@ struct WrongWayBanner: View {
                     Text("Ignore")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(Theme.warn)
-                        .padding(.horizontal, Theme.Space.m)
-                        .frame(minHeight: 44)
+                        .padding(.horizontal, Theme.Space.l)
+                        .frame(minHeight: Theme.minTargetRiding)
                         .overlay(Capsule().strokeBorder(Theme.warn.opacity(0.6), lineWidth: 1))
                 }
                 .buttonStyle(.plain)

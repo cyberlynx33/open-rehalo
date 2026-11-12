@@ -30,6 +30,9 @@ final class RouteLibrary: ObservableObject {
 
     /// Route to open in the Routes tab (consumed and reset by `RoutesTab`).
     @Published var pendingDetail: UUID?
+    /// True while nothing has been imported yet (the Map tab's first-run hint). Kept up to date by
+    /// the imports and deletions, so reading it in a view body costs no fetch.
+    @Published private(set) var isEmpty = true
 
     private var routeCache: [UUID: GPXRoute] = [:]
     private var imageCache: [UUID: (size: Int, image: UIImage)] = [:]
@@ -45,6 +48,7 @@ final class RouteLibrary: ObservableObject {
             container = try! ModelContainer(for: SavedRoute.self,
                                             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         }
+        refreshIsEmpty()
     }
 
     // MARK: - Files
@@ -68,12 +72,62 @@ final class RouteLibrary: ObservableObject {
     }
 
     // MARK: - Import
+    //
+    // The file read (security-scoped, and coordinated, which waits for an iCloud download), the
+    // SHA-256 and the GPX parse run off the main actor (`prepare`); only the SwiftData side runs
+    // on it (`store`). `importsInFlight` lets the Routes and Map tabs show progress meanwhile.
 
-    /// Import a GPX from a file URL (Files picker, "Open in…", AirDrop). Handles security-scoped
-    /// and iCloud (coordinated) reads; removes the system's Inbox copy afterwards. The source is
-    /// sniffed from the GPX header (Wikiloc, Komoot…), else `defaultSource`.
+    /// Imports being read, parsed or stored right now.
+    @Published private(set) var importsInFlight = 0
+    var isImporting: Bool { importsInFlight > 0 }
+
+    /// A GPX read, hashed and parsed, ready to be stored.
+    struct PreparedImport: Sendable {
+        let data: Data
+        let hash: String
+        let route: GPXRoute
+        let fallbackName: String
+        let source: RouteSource
+    }
+
+    /// Import a GPX from a file URL (Files picker, "Open in…", AirDrop). Removes the system's
+    /// Inbox copy afterwards. The source is sniffed from the GPX header (Wikiloc, Komoot…), else
+    /// `defaultSource`.
     @discardableResult
-    func importGPX(from url: URL, defaultSource: RouteSource) throws -> SavedRoute {
+    func importGPX(from url: URL, defaultSource: RouteSource) async throws -> SavedRoute {
+        importsInFlight += 1
+        defer { importsInFlight -= 1 }
+        let prepared = try await Task.detached(priority: .userInitiated) {
+            try Self.prepare(url: url, defaultSource: defaultSource)
+        }.value
+        return try await store(prepared, name: nil)
+    }
+
+    /// Import GPX bytes. `name` overrides the GPX `<name>` (used for the localized demo name).
+    @discardableResult
+    func importGPX(data: Data, fallbackName: String, source: RouteSource, name: String? = nil) async throws -> SavedRoute {
+        importsInFlight += 1
+        defer { importsInFlight -= 1 }
+        let prepared = try await Task.detached(priority: .userInitiated) {
+            try Self.prepare(data: data, fallbackName: fallbackName, source: source)
+        }.value
+        return try await store(prepared, name: name)
+    }
+
+    /// Add (or find) the bundled demo route "Demo route · City centre". Nil if the app has no
+    /// bundled `DemoRoute.gpx`.
+    @discardableResult
+    func addDemoRoute() async -> SavedRoute? {
+        let demoRaw = RouteSource.demo.rawValue
+        if let existing = fetchOne(#Predicate<SavedRoute> { $0.sourceRaw == demoRaw }) { return existing }
+        guard let url = Bundle.main.url(forResource: "DemoRoute", withExtension: "gpx"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? await importGPX(data: data, fallbackName: "DemoRoute", source: .demo,
+                                    name: String(localized: "Demo route · City centre"))
+    }
+
+    /// Off the main actor: the security-scoped, coordinated read, then `prepare(data:…)`.
+    nonisolated private static func prepare(url: URL, defaultSource: RouteSource) throws -> PreparedImport {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
@@ -87,52 +141,51 @@ final class RouteLibrary: ObservableObject {
         if let readError { throw readError }
         guard let data = read else { throw GPXError.noPoints }
 
-        let saved = try importGPX(data: data,
-                                  fallbackName: url.deletingPathExtension().lastPathComponent,
-                                  source: RouteSource.detect(in: data) ?? defaultSource)
+        let prepared = try prepare(data: data, fallbackName: url.deletingPathExtension().lastPathComponent,
+                                   source: RouteSource.detect(in: data) ?? defaultSource)
         if url.path.contains("/Inbox/") { try? FileManager.default.removeItem(at: url) }
-        return saved
+        return prepared
     }
 
-    /// Import GPX bytes. `name` overrides the GPX `<name>` (used for the localized demo name).
-    @discardableResult
-    func importGPX(data: Data, fallbackName: String, source: RouteSource, name: String? = nil) throws -> SavedRoute {
+    /// Off the main actor: hash and parse.
+    nonisolated private static func prepare(data: Data, fallbackName: String, source: RouteSource) throws -> PreparedImport {
         let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        if let existing = fetchOne(#Predicate<SavedRoute> { $0.contentHash == hash }) {
-            return existing
-        }
         let parsed = try GPXDocumentParser().parse(data: data)
         guard parsed.points.count >= 2 else { throw GPXError.noPoints }
+        return PreparedImport(data: data, hash: hash, route: parsed, fallbackName: fallbackName, source: source)
+    }
+
+    /// On the main actor: dedupe by hash, write the file (off it), insert the metadata.
+    private func store(_ prepared: PreparedImport, name: String?) async throws -> SavedRoute {
+        let hash = prepared.hash
+        if let existing = fetchOne(#Predicate<SavedRoute> { $0.contentHash == hash }) { return existing }
 
         let id = UUID()
         let fileName = id.uuidString + ".gpx"
-        try data.write(to: Self.directory.appendingPathComponent(fileName), options: .atomic)
+        let fileURL = Self.directory.appendingPathComponent(fileName)
+        let data = prepared.data
+        try await Task.detached(priority: .userInitiated) { try data.write(to: fileURL, options: .atomic) }.value
+        // The same bytes may have been imported while the file was being written.
+        if let existing = fetchOne(#Predicate<SavedRoute> { $0.contentHash == hash }) {
+            try? FileManager.default.removeItem(at: fileURL)
+            return existing
+        }
 
-        let parsedName = parsed.name == "Route" && !fallbackName.isEmpty ? fallbackName : parsed.name
+        let parsed = prepared.route
+        let parsedName = parsed.name == "Route" && !prepared.fallbackName.isEmpty ? prepared.fallbackName : parsed.name
         let displayName = name ?? parsedName
         let route = GPXRoute(id: id, name: displayName, points: parsed.points, elevations: parsed.elevations,
                              navPoints: parsed.navPoints)
-        let saved = SavedRoute(id: id, name: displayName, source: source,
+        let saved = SavedRoute(id: id, name: displayName, source: prepared.source,
                                distance: route.length, gain: route.totalGain, loss: route.totalLoss,
                                estimatedDuration: route.estimatedDuration,
                                fileName: fileName, contentHash: hash)
         context.insert(saved)
         save()
+        isEmpty = false
         routeCache[id] = route
         Task { await ensureThumbnail(for: saved) }
         return saved
-    }
-
-    /// Add (or find) the bundled demo route "Demo route · City centre". Nil if the app has no
-    /// bundled `DemoRoute.gpx`.
-    @discardableResult
-    func addDemoRoute() -> SavedRoute? {
-        let demoRaw = RouteSource.demo.rawValue
-        if let existing = fetchOne(#Predicate<SavedRoute> { $0.sourceRaw == demoRaw }) { return existing }
-        guard let url = Bundle.main.url(forResource: "DemoRoute", withExtension: "gpx"),
-              let data = try? Data(contentsOf: url) else { return nil }
-        return try? importGPX(data: data, fallbackName: "DemoRoute", source: .demo,
-                              name: String(localized: "Demo route · City centre"))
     }
 
     // MARK: - Queries
@@ -179,6 +232,7 @@ final class RouteLibrary: ObservableObject {
         if RouteSelection.shared.route?.id == id { RouteSelection.shared.clear() }
         context.delete(saved)
         save()
+        refreshIsEmpty()
     }
 
     func markUsed(_ saved: SavedRoute) {
@@ -203,8 +257,9 @@ final class RouteLibrary: ObservableObject {
         return true
     }
 
-    /// True while nothing has been imported yet (the Map tab's first-run hint).
-    var isEmpty: Bool { ((try? context.fetchCount(FetchDescriptor<SavedRoute>())) ?? 0) == 0 }
+    private func refreshIsEmpty() {
+        isEmpty = ((try? context.fetchCount(FetchDescriptor<SavedRoute>())) ?? 0) == 0
+    }
 
     // MARK: - Sharing
 

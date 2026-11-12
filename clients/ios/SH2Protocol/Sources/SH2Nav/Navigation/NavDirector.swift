@@ -256,7 +256,21 @@ public struct NavDirector: Sendable {
     public func continuing(on points: [NavLocation]) -> NavDirector {
         var d = NavDirector(points: points, title: title, settings: settings)
         d.carouselOnNavigation = carouselOnNavigation
+        d.currentLocation = currentLocation
         return d
+    }
+
+    /// Addition (matched engine): the ride carries on `along` metres into this director's route, the
+    /// rider at `fix` (an inverted route, §9.3). The guidance starts there, on the route: built at the
+    /// first fix instead, it would start at step 0 and the step sync would take a few fixes to catch up.
+    public mutating func placeOnRoute(at along: Double, from fix: NavLocation) {
+        guard guidance == nil, let stepAlong else { return }
+        var g = NavGuidance(start: fix, steps: steps)
+        g.isNavigating = true
+        g.enableMatching(stepAlong: stepAlong)
+        g.placeOnRoute(at: along, from: fix)
+        guidance = g
+        currentLocation = fix
     }
 
     /// The ring switched to its Navigation card: answer with the card's content.
@@ -289,10 +303,13 @@ public struct NavDirector: Sendable {
     // MARK: - Java dispatch
 
     /// `processGPSCompassModeResults` (off the path): "ride to calibrate" until the direction of
-    /// travel is known, then the orange pointer to the route.
+    /// travel is known, then the orange pointer to the route. The original asks the bearings; this
+    /// asks whether the pointer has an angle, which is the same thing on the official flow (the
+    /// angle is set on the fix the direction appears) and also right when the angle comes from the
+    /// matcher's direction, or hasn't been computed yet on a fix the matcher held or kept rejoining.
     func gpsCompassResults(_ ds: NavDisplayStatus, _ g: NavGuidance) -> [NavCommand] {
         let text = Self.instructionText(ds.deviceInstruction) ?? ds.deviceInstruction
-        if g.bearing.current == NavBearing.unknown && g.bearing.crowFlies == NavBearing.unknown {
+        if ds.bearing == NavBearing.unknown {
             return [NavCommand(data: Commands.navPointerStandby(distance: distanceToDestination - 50, text: text,
                                                                 metric: settings.metric,
                                                                 colour: Commands.NavColour.progress(ds.progress)),
@@ -398,7 +415,7 @@ public struct NavDirector: Sendable {
     /// `(int) destination.distanceTo(currentLocation)`, from the previous fix.
     var distanceToDestination: Int {
         guard let g = guidance, let loc = currentLocation else { return 0 }
-        return Int(g.destination.distance(to: loc))
+        return NavMath.trunc(g.destination.distance(to: loc))
     }
 
     // MARK: - Text and colours
@@ -424,13 +441,20 @@ public struct NavDirector: Sendable {
 
     /// Addition: a routed instruction ("Turn right onto Carrer Major", "Gira a la derecha
     /// hacia Av. Catalunya") shortened to the street for the OLED; the whole instruction when no
-    /// street is recognised.
+    /// street is recognised. "Toward X" names where the road leads, not the road: it only counts when
+    /// nothing else does, and is cut off a street that carries it ("on US-101 toward San Jose").
     public static func shortInstruction(_ instruction: String) -> String {
         let text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        let separators = [" onto ", " toward ", " towards ", " on ", " hacia ", " por ", " en ", " a "]
-        for sep in separators {
+        let streets = [" onto ", " on ", " por ", " en ", " a "]
+        let destinations = [" toward ", " towards ", " hacia "]
+        for sep in streets + destinations {
             guard let r = text.range(of: sep, options: [.caseInsensitive, .backwards]) else { continue }
-            let street = text[r.upperBound...].trimmingCharacters(in: .whitespaces)
+            var street = text[r.upperBound...].trimmingCharacters(in: .whitespaces)
+            if streets.contains(sep) {
+                for d in destinations {
+                    if let cut = street.range(of: d, options: .caseInsensitive) { street = String(street[..<cut.lowerBound]) }
+                }
+            }
             if let first = street.unicodeScalars.first,
                CharacterSet.uppercaseLetters.union(.decimalDigits).contains(first) {
                 return street.hasSuffix(".") ? String(street.dropLast()) : street

@@ -2,6 +2,9 @@
 # Produces an UNSIGNED .ipa artifact, ready to sideload with SideStore or iLoader
 # (they re-sign it with your Apple ID on install).
 # A `v*` tag also publishes a GitHub Release with that .ipa and the notes in docs/releases/<tag>.md.
+# A push to `dev` also replaces the .ipa of the rolling `dev-latest` prerelease, which gives the newest
+# development build one stable download link (workflow artifacts are only served zipped).
+# Both then refresh the AltStore / SideStore sources on rehalo.app (the Website workflow builds them).
 name: iOS build
 
 on:
@@ -11,11 +14,24 @@ on:
     paths: ['clients/ios/**', '.github/workflows/ios.yml']
   pull_request:
     paths: ['clients/ios/**']
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      publish_dev_latest:
+        description: 'Also publish this build as the dev-latest prerelease'
+        type: boolean
+        default: false
+
+# The build job only reads the repo; the release jobs raise their own token to contents: write, and to
+# actions: write to start the Website workflow.
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: macos-26            # Xcode 26: MapKit's cycling directions need Swift 6.2
+    outputs:
+      version: ${{ steps.number.outputs.version }}
+      build: ${{ steps.number.outputs.build }}
     defaults:
       run:
         working-directory: clients/ios
@@ -28,6 +44,21 @@ jobs:
           version=$(grep -m1 'MARKETING_VERSION' project.yml | sed -E 's/.*"(.*)".*/\1/')
           [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME, but project.yml says $version"; exit 1; }
           test -f "../../docs/releases/$GITHUB_REF_NAME.md" || { echo "::error::docs/releases/$GITHUB_REF_NAME.md is missing"; exit 1; }
+
+      # AltStore and SideStore offer an update when the installed build number differs from the source's.
+      # A release keeps the build in project.yml; any other build adds the run number (2 becomes 2.45),
+      # so each dev-latest build is a new version to them.
+      - name: Choose the build number
+        id: number
+        run: |
+          version=$(grep -m1 'MARKETING_VERSION' project.yml | sed -E 's/.*"(.*)".*/\1/')
+          base=$(grep -m1 'CURRENT_PROJECT_VERSION' project.yml | sed -E 's/.*"(.*)".*/\1/')
+          case "$GITHUB_REF" in
+            refs/tags/v*) build=$base ;;
+            *) build="$base.$GITHUB_RUN_NUMBER" ;;
+          esac
+          echo "rehalo $version ($build)"
+          { echo "version=$version"; echo "build=$build"; } >> "$GITHUB_OUTPUT"
 
       - name: Toolchain info
         run: xcodebuild -version && swift --version
@@ -43,6 +74,8 @@ jobs:
         run: xcodegen generate
 
       - name: Archive for device (unsigned)
+        env:
+          BUILD: ${{ steps.number.outputs.build }}
         run: |
           set -o pipefail
           xcodebuild archive \
@@ -52,9 +85,12 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/SmartHalo2.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
             archive
 
       - name: Package the unsigned .ipa
+        env:
+          BUILD: ${{ steps.number.outputs.build }}
         run: |
           set -euo pipefail
           APP="$RUNNER_TEMP/SmartHalo2.xcarchive/Products/Applications/SmartHalo2.app"
@@ -63,6 +99,12 @@ jobs:
           # M12: the Live Activity is embedded as a WidgetKit extension.
           test -d "$APP/PlugIns/HaloLiveActivity.appex" || { echo "PlugIns/HaloLiveActivity.appex is missing"; ls -la "$APP" "$APP/PlugIns" || true; exit 1; }
           /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist"
+          # The app and its extension must carry the same build number.
+          for plist in "$APP/Info.plist" "$APP/PlugIns/HaloLiveActivity.appex/Info.plist"; do
+            got=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")
+            [ "$got" = "$BUILD" ] || { echo "::error::$plist has CFBundleVersion $got, expected $BUILD"; exit 1; }
+          done
+          echo "CFBundleVersion: $BUILD"
           test -f "$APP/Assets.car" && /usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon" "$APP/Info.plist" || { echo "The app icon (AppIcon) is missing"; exit 1; }
           rm -rf "$RUNNER_TEMP/Payload" && mkdir -p "$RUNNER_TEMP/Payload"
           cp -R "$APP" "$RUNNER_TEMP/Payload/"
@@ -83,6 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
 
@@ -98,3 +141,67 @@ jobs:
           gh release create "$GITHUB_REF_NAME" rehalo-unsigned.ipa \
             --title "rehalo ${GITHUB_REF_NAME#v}" \
             --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+
+      # A release made with this job's token doesn't start other workflows, but a dispatch does.
+      - name: Refresh the AltStore sources on rehalo.app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
+
+  # Rolling prerelease: the `dev-latest` tag follows the last build of `dev`, and the .ipa under it is
+  # replaced in place, so <repo>/releases/download/dev-latest/rehalo-unsigned.ipa is always the newest
+  # development build. A manual run publishes any branch there with the publish_dev_latest input.
+  dev-latest:
+    needs: build
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/dev') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_dev_latest)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: ios-dev-latest      # two pushes in a row update the tag and the asset in turn
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the .ipa
+        uses: actions/download-artifact@v4
+        with:
+          name: rehalo-unsigned-ipa
+
+      - name: Move the dev-latest tag to this commit
+        run: |
+          git tag -f dev-latest "$GITHUB_SHA"
+          git push -f origin refs/tags/dev-latest
+
+      - name: Publish or update the dev-latest prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+          BUILD: ${{ needs.build.outputs.build }}
+        run: |
+          set -euo pipefail
+          subject=$(git log -1 --format=%s "$GITHUB_SHA")
+          {
+            echo "Unsigned development build of the iOS app, built from \`$GITHUB_REF_NAME\`. Every push to \`dev\` replaces it."
+            echo "Sideload it with SideStore or iLoader like a release, and expect rough edges: the numbered releases are the stable ones."
+            echo
+            echo "- Version: $VERSION ($BUILD)"
+            echo "- Commit: $GITHUB_SHA ($subject)"
+            echo "- Built: $(date -u +'%Y-%m-%d %H:%M UTC'), [run $GITHUB_RUN_NUMBER]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+            echo
+            echo "Direct link: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/dev-latest/rehalo-unsigned.ipa"
+          } > notes.md
+          if gh release view dev-latest >/dev/null 2>&1; then
+            gh release edit dev-latest --prerelease --title "rehalo dev (latest build)" --notes-file notes.md
+          else
+            gh release create dev-latest --prerelease --title "rehalo dev (latest build)" --notes-file notes.md
+          fi
+          gh release upload dev-latest rehalo-unsigned.ipa --clobber
+
+      - name: Refresh the AltStore sources on rehalo.app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"

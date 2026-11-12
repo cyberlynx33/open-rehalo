@@ -14,6 +14,10 @@ public enum Frame {
     public enum FrameError: Error, Sendable {
         case messageTooLong(Int)
         case encryptedButNoKey
+        /// A CTRL notification with no bytes: nothing says how long the reply is.
+        case malformedCtrl
+        /// The CTRL announced more bytes than the PAYLOAD chunks delivered (a chunk was lost).
+        case truncatedReply(expected: Int, got: Int)
     }
 
     /// GATT UUIDs for the vendor service `9254xxxx-d6ed-4617-a4b4-d749f57710ce`.
@@ -71,8 +75,12 @@ public enum Frame {
     /// (truncated to `len`) is decrypted with `cipher`.
     public static func decodeReply(ctrl: Data, payloadAccum: Data, cipher: Crypto.LinkKeys?) throws -> Data {
         let ctrlBytes = [UInt8](ctrl)
-        let len = Int(ctrlBytes[0])
+        guard let first = ctrlBytes.first else { throw FrameError.malformedCtrl }
+        let len = Int(first)
         let crypted = ctrlBytes.count > 1 ? ctrlBytes[1] : 0
+        guard payloadAccum.count >= len else {
+            throw FrameError.truncatedReply(expected: len, got: payloadAccum.count)
+        }
         let body = Data(payloadAccum.prefix(len))
         if crypted != 0 {
             guard let cipher else { throw FrameError.encryptedButNoKey }

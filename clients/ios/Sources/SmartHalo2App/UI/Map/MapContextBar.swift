@@ -192,6 +192,7 @@ private struct MapActionStyle: ButtonStyle {
 struct MapNotice: View {
     enum Kind: Equatable {
         case leadingIn
+        case importing
         case error(String)
         case locationOff
         case noHalo
@@ -219,6 +220,11 @@ struct MapNotice: View {
             HStack(spacing: Theme.Space.s) {
                 ProgressView().controlSize(.small)
                 Text("Finding a route to the start…").foregroundStyle(Theme.textDim)
+            }
+        case .importing:
+            HStack(spacing: Theme.Space.s) {
+                ProgressView().controlSize(.small)
+                Text("Importing the route…").foregroundStyle(Theme.textDim)
             }
         case .error(let message):
             Text(verbatim: message).foregroundStyle(Theme.danger)

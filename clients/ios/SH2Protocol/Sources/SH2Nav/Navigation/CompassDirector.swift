@@ -72,12 +72,14 @@ public struct CompassDirector: Sendable {
         bearing.update(fix)
 
         let p = progress(fix)
-        let distance = Int(destination.distance(to: currentLocation ?? fix)) - 50
+        let distance = NavMath.trunc(destination.distance(to: currentLocation ?? fix)) - 50
         let colour = Commands.NavColour.progress(p)
-        let rider: Int? = heading.map { Int($0.rounded()) }
+        // The iPhone's heading is 0…360; in −180…180 like the GPS bearing, the angle sent stays in
+        // the (−360, 360) the official pointer has, instead of reaching −540 facing just west of north.
+        let rider: Int? = heading.map { NavMath.normalized(NavMath.trunc($0.rounded())) }
             ?? (bearing.crowFlies != NavBearing.unknown ? bearing.crowFlies : nil)
         if let rider {
-            let angle = Int((fix.bearing(to: destination) - Double(rider)).rounded())
+            let angle = NavMath.trunc((fix.bearing(to: destination) - Double(rider)).rounded())
             result.commands.append(NavCommand(data: Commands.navPointer(angle: angle, distance: distance, text: title,
                                                                         metric: settings.metric, colour: colour),
                                               label: "navPointer"))
@@ -101,7 +103,7 @@ public struct CompassDirector: Sendable {
     func progress(_ fix: NavLocation) -> Int {
         guard let total = initialDistance.map(Float.init) else { return 0 }
         let d = Float(fix.distance(to: destination))
-        return Int(min(max((total - d + 50) / total * 100, 0), 100))
+        return NavMath.clampTrunc((total - d + 50) / total * 100, 0, 100)
     }
 
     var pointerOff: NavCommand { NavCommand(data: Commands.navPointerOff(), label: "navPointerOff") }

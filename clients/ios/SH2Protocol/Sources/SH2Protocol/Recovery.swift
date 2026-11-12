@@ -20,16 +20,27 @@ public enum Recovery {
     /// Port of `generateDevicePassword()`.
     public static func generateDevicePassword() -> String {
         let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-        var bytes = [UInt8](repeating: 0, count: 32)
+        // Rejection sampling: 256 isn't a multiple of 62, so `byte % 62` would favour the first
+        // 8 symbols. Bytes from 248 (= 4 × 62) up are redrawn and every symbol is equally likely.
+        let limit = UInt8(alphabet.count * (256 / alphabet.count))
+        var s = ""
+        while s.count < 32 {
+            for b in randomBytes(48) where b < limit && s.count < 32 {
+                s.append(alphabet[Int(b) % alphabet.count])
+            }
+        }
+        return s
+    }
+
+    private static func randomBytes(_ count: Int) -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: count)
         let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         if status != errSecSuccess {
             // Fallback to the system RNG; both are cryptographically secure on Apple platforms.
             var rng = SystemRandomNumberGenerator()
             for i in 0..<bytes.count { bytes[i] = UInt8.random(in: 0...255, using: &rng) }
         }
-        var s = ""
-        for b in bytes { s.append(alphabet[Int(b) % alphabet.count]) }
-        return s
+        return bytes
     }
 
     /// Un-pair via the reset-challenge route (does NOT require the current password).
@@ -62,13 +73,19 @@ public enum Recovery {
     public static func repair(session: Session, newPassword: String = generateDevicePassword()) async throws -> String {
         SH2Log.log("recovery: step 3/3 re-pair — handshake with empty password")
         try await session.handshake(password: "")   // un-paired device → empty auth OK
-        SH2Log.log("recovery: setPassword (new 32-char password)")
-        let r = try await session.transceive(Commands.setPassword(Data(newPassword.utf8)), crypted: true, label: "setPassword")
+        try await setPassword(session: session, newPassword)
+        SH2Log.log("recovery: DONE — new password set and owned")
+        return newPassword
+    }
+
+    /// Store `password` on the ring (`setPassword`, encrypted). Needs an authenticated session; on
+    /// an un-paired ring the empty password authenticates. The firmware takes 32 bytes.
+    public static func setPassword(session: Session, _ password: String) async throws {
+        SH2Log.log("recovery: setPassword (32-char password)")
+        let r = try await session.transceive(Commands.setPassword(Data(password.utf8)), crypted: true, label: "setPassword")
         guard [UInt8](r).first == ReturnCode.ok.rawValue else {
             throw RecoveryError.commandFailed(step: "setPassword", code: [UInt8](r).first)
         }
-        SH2Log.log("recovery: DONE — new password set and owned")
-        return newPassword
     }
 
     /// Full recovery: reset-challenge + re-pair with a fresh password. Port of `recoverAccess`.

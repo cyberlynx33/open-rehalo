@@ -74,9 +74,12 @@ public enum NavMath {
         return a
     }
 
-    /// C `(int)` of a double, without trapping on NaN / infinity like Swift's `Int(_:)`.
+    /// C `(int)` of a double, without trapping on NaN / infinity like Swift's `Int(_:)`, nor on a
+    /// finite value past `Int`'s range (`Double(Int.max)` rounds up to 2^63, where `Int(x)` traps).
     static func trunc(_ x: Double) -> Int {
         guard x.isFinite else { return x.isNaN ? 0 : (x > 0 ? Int.max : Int.min) }
+        if x >= Double(Int.max) { return Int.max }
+        if x <= Double(Int.min) { return Int.min }
         return Int(x)
     }
 

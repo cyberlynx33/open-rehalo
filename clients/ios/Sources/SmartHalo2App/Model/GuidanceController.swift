@@ -108,6 +108,9 @@ final class GuidanceController: ObservableObject {
     @Published private(set) var canInvert = false
     /// Bumps when the wrong-way haptic should play: at most `maxWrongWayAlerts` in a row, ≥ 30 s apart.
     @Published private(set) var wrongWayAlerts = 0
+    /// Bumps whenever `route` gets new geometry (a new ride, `invert()`): `GPXRoute ==` only compares
+    /// ids, so the map keys its route layers on this too (docs/MAP_MATCHING_SPEC.md §9.3).
+    @Published private(set) var routeRevision = 0
 
     var locationAuthorized: Bool {
         locationStatus == .authorizedWhenInUse || locationStatus == .authorizedAlways
@@ -185,6 +188,13 @@ final class GuidanceController: ObservableObject {
     /// Ask for location permission (Map tab recenter / first use).
     func requestLocationPermission() { tracker.requestAuthorization() }
 
+    /// One fix while not navigating, so `lastLocation` is fresh for the Map tab's checks (how far
+    /// the rider is from a route's start). The tracker stops again as soon as it arrives (`handle`).
+    func primeLocation() {
+        guard !following, locationAuthorized else { return }
+        tracker.start()
+    }
+
     /// Start guiding along `route`. Uses the simulated rider when the demo Halo is active.
     /// - `instructions`: a routed destination's instructions (street names on the ring).
     /// - `routedSteps`: a routed destination's own steps, for its turns.
@@ -241,12 +251,16 @@ final class GuidanceController: ObservableObject {
 
     /// Reset everything for a new ride along `route` and start the clock and the rider.
     private func begin(_ route: GPXRoute, _ ride: RideEngine) {
+        // Whatever the previous ride left for the ring (an arrival's `navOff` 10 s later, fixes the
+        // ring hasn't taken yet) must not delay this ride's intro.
+        controller?.cancelNav()
         if following { finish(completed: false, showSummary: false) }
         engine = ride
         compassTarget = nil
         headingTracker?.stop()
         headingTracker = nil
         self.route = route
+        routeRevision += 1
         following = true
         summary = nil
         elapsed = 0
@@ -298,6 +312,7 @@ final class GuidanceController: ObservableObject {
         guard following, let route, let current = engine, let inverted = current.inverted() else { return }
         engine = inverted.engine
         self.route = GPXRoute(id: route.id, name: route.name, geometry: inverted.engine.route)
+        routeRevision += 1
         RideRecorder.shared.record(RideTrace.Entry(fix: nil, engine: inverted.engine, commands: inverted.commands,
                                                    event: "invert"))
         sendRing(inverted.commands)
@@ -383,14 +398,18 @@ final class GuidanceController: ObservableObject {
     private func handle(_ loc: CLLocation) {
         userCoord = loc.coordinate
         lastLocation = loc
-        guard following, var ride = engine else { return }
+        guard following, var ride = engine else {
+            tracker.stop()          // a primed fix (`primeLocation`): one is enough
+            return
+        }
         let compass = headingTracker?.isReliable == true ? headingTracker?.heading : nil
         let fix = RideFix(loc)
         let result = ride.update(fix, compassHeading: compass)
         engine = ride
         RideRecorder.shared.record(RideTrace.Entry(fix: fix, engine: ride, commands: result.commands,
                                                    arrived: result.arrived))
-        sendRing(result.commands)
+        // A fix's commands are superseded by the next fix's; the arrival sequence never is.
+        sendRing(result.commands, droppable: !result.arrived)
         if result.arrived {
             finish(completed: true)
             return
@@ -443,9 +462,11 @@ final class GuidanceController: ObservableObject {
 
     // MARK: - Ring (official navigation)
 
-    private func sendRing(_ commands: [NavCommand]) {
+    /// `droppable`: a batch the next one makes stale (a fix's guidance, a card's answer), which the
+    /// ring's queue may skip when it falls behind.
+    private func sendRing(_ commands: [NavCommand], droppable: Bool = false) {
         guard connection.state == .connected, let ring = controller else { return }
-        ring.sendNav(commands)
+        ring.sendNav(commands, droppable: droppable)
     }
 
     /// The ring reports its carousel card; on the Navigation card it gets the card's content
@@ -457,7 +478,7 @@ final class GuidanceController: ObservableObject {
         carouselSub = controller?.$carouselCard
             .sink { [weak self] card in
                 guard let self, self.following, let cmds = self.engine?.carouselChanged(card: card) else { return }
-                self.sendRing(cmds)
+                self.sendRing(cmds, droppable: true)
             }
     }
 }

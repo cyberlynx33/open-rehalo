@@ -57,7 +57,7 @@ final class NotificationsTests: XCTestCase {
             }
             func enableNotifications() async throws {}
             func notificationStream() -> AsyncStream<SH2Notification> { stream }
-            func writeNoResponse(uuid: String, data: Data) async throws {}
+            func write(uuid: String, data: Data) async throws {}
             func pushUp(_ data: Data) throws {
                 let enc = try Frame.encodeMessage(data, cipher: nil)
                 for (i, chunk) in enc.chunks.enumerated() {

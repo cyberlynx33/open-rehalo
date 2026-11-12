@@ -183,7 +183,22 @@
       </details>
       <details>
         <summary>How do I install it?</summary>
-        <p>rehalo isn't on the App Store. It's installed by sideloading with your own Apple ID, using a tool such as SideStore.</p>
+        <p>rehalo isn't on the App Store. It's installed by sideloading with your own Apple ID, using SideStore or AltStore. Add the rehalo source to one of them, and the app updates from there.</p>
+        <div class="source">
+          <div class="actions">
+            <a class="btn btn-small" href="sidestore://source?url=https://rehalo.app/altstore/apps.json">Add to SideStore</a>
+            <a class="btn btn-small" href="altstore://source?url=https://rehalo.app/altstore/apps.json">Add to AltStore</a>
+          </div>
+          <p class="fine">Or add it by hand under Sources: <code>https://rehalo.app/altstore/apps.json</code></p>
+        </div>
+        <p>Development builds, rebuilt with every change, have a source of their own. Expect rough edges, and add one source or the other, not both.</p>
+        <div class="source">
+          <div class="actions">
+            <a class="btn btn-small" href="sidestore://source?url=https://rehalo.app/altstore/apps-dev.json">Dev builds in SideStore</a>
+            <a class="btn btn-small" href="altstore://source?url=https://rehalo.app/altstore/apps-dev.json">Dev builds in AltStore</a>
+          </div>
+          <p class="fine">By hand: <code>https://rehalo.app/altstore/apps-dev.json</code></p>
+        </div>
       </details>
       <details>
         <summary>Can I reclaim a ring that was paired to the old app?</summary>

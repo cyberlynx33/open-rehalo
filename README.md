@@ -77,9 +77,20 @@ copy too, with `SH2_STM_FIRMWARE`.
 
 rehalo isn't on the App Store yet. The app is unsigned, and you sideload it with your own Apple ID.
 
-**Get the `.ipa`:** download `rehalo-unsigned.ipa` from the
+**From SideStore or AltStore:** add the rehalo source under *Sources*, and the app installs and updates
+from there.
+
+- Releases: `https://rehalo.app/altstore/apps.json`
+- Development builds, one for every push to `dev`: `https://rehalo.app/altstore/apps-dev.json`
+
+Add one or the other, not both: they offer the same app. The [website's FAQ](https://rehalo.app/#faq-title)
+has buttons that add them in one tap.
+
+**Or get the `.ipa`:** download `rehalo-unsigned.ipa` from the
 [latest release](https://github.com/cyberlynx33/open-rehalo/releases/latest), or build it yourself with
-`cd clients/ios && xcodegen generate` on a Mac.
+`cd clients/ios && xcodegen generate` on a Mac. The newest development build, rebuilt on every push to
+`dev`, is the [dev-latest](https://github.com/cyberlynx33/open-rehalo/releases/tag/dev-latest)
+prerelease.
 
 **Install it** with [iLoader](https://github.com/nab138/iloader) over USB, or with
 [SideStore](https://sidestore.io) for automatic 7-day re-signing. Then trust the certificate in

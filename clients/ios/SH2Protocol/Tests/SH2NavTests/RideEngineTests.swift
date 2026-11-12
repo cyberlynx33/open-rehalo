@@ -213,10 +213,45 @@ final class RideEngineTests: XCTestCase {
 
     func testGPXRouteIsTheTrackNotItsPointsOfInterest() throws {
         let f = try GPXFile.parse(data: Data(gpx.utf8))
-        XCTAssertEqual(f.name, "Fuente")               // the first <name>, wherever it is
+        XCTAssertEqual(f.name, "Ruta")                 // the track's name, not a waypoint's
         XCTAssertEqual(f.points, [GeoPoint(41.1, 2.1), GeoPoint(41.2, 2.2)])
         XCTAssertEqual(f.navPoints, f.points)
         XCTAssertEqual(f.elevations, [100, 110])
+    }
+
+    func testGPXNamePrefersTheTrackThenTheFileOverAnyOther() throws {
+        let metadata = try GPXFile.parse(data: Data("""
+        <gpx><metadata><author><name>Ann</name></author><name>Sunday ride</name></metadata>
+        <trk><trkseg><trkpt lat="41.1" lon="2.1"/><trkpt lat="41.2" lon="2.2"/></trkseg></trk></gpx>
+        """.utf8))
+        XCTAssertEqual(metadata.name, "Sunday ride")
+        let track = try GPXFile.parse(data: Data("""
+        <gpx><metadata><name>Sunday ride</name></metadata>
+        <trk><name>Ruta</name><trkseg><trkpt lat="41.1" lon="2.1"/><trkpt lat="41.2" lon="2.2"/></trkseg></trk></gpx>
+        """.utf8))
+        XCTAssertEqual(track.name, "Ruta")
+    }
+
+    func testGPXWithPrefixedElementsIsRead() throws {
+        let f = try GPXFile.parse(data: Data("""
+        <gpx:gpx xmlns:gpx="http://www.topografix.com/GPX/1/1" version="1.1">
+        <gpx:trk><gpx:name>Prefixed</gpx:name><gpx:trkseg>
+        <gpx:trkpt lat="41.1" lon="2.1"><gpx:ele>7</gpx:ele></gpx:trkpt>
+        <gpx:trkpt lat="41.2" lon="2.2"/>
+        </gpx:trkseg></gpx:trk></gpx:gpx>
+        """.utf8))
+        XCTAssertEqual(f.name, "Prefixed")
+        XCTAssertEqual(f.points, [GeoPoint(41.1, 2.1), GeoPoint(41.2, 2.2)])
+        XCTAssertEqual(f.elevations, [7, nil])
+    }
+
+    func testMalformedGPXSaysSo() {
+        let truncated = Data("""
+        <gpx><trk><trkseg><trkpt lat="41.1" lon="2.1"/><trkpt lat="41.2" lon="2.2"/></trkseg>
+        """.utf8)
+        XCTAssertThrowsError(try GPXFile.parse(data: truncated)) { error in
+            guard case GPXError.malformed = error else { return XCTFail("\(error)") }
+        }
     }
 
     func testGPXPlannedRouteAloneIsNavigable() throws {

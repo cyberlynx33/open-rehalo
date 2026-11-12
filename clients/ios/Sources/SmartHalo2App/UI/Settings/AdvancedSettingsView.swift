@@ -35,6 +35,8 @@ private struct ObservedAdvancedList: View {
     @State private var confirmForgetPassword = false
     @State private var simulating = false
     @AppStorage(RideRecorder.enabledKey) private var recordRides = false
+    /// The newest recorded ride, read once on appear (not a directory listing per render).
+    @State private var lastRide: URL?
 
     init(controller: DeviceController?) {
         _box = StateObject(wrappedValue: ControllerBox(controller))
@@ -91,7 +93,12 @@ private struct ObservedAdvancedList: View {
         } message: {
             Text("Removes this phone's stored device password. You'll need to recover/re-pair to control the ring again.")
         }
+        // On the List, not on a Section: presentations attached to list sections are unreliable.
+        .sheet(isPresented: $showPasswordEntry) {
+            if let controller { passwordEntrySheet(controller) }
+        }
         .task {
+            lastRide = RideRecorder.rides.first
             guard let controller, isReady else { return }
             await controller.refreshDeviceState()
         }
@@ -131,16 +138,10 @@ private struct ObservedAdvancedList: View {
             } label: {
                 Label("Sync clock & language", systemImage: "clock.arrow.2.circlepath")
             }
-            Button {
-                guard let controller else { return }
-                Task { await controller.calibrateCompass() }
-            } label: {
-                Label("Calibrate compass", systemImage: "safari")
-            }
+            // No "Calibrate compass": the SmartHalo 2's firmware has no handler for {4,3} (it
+            // answers UNIMPLEMENTED) and nothing reads its magnetometer over Bluetooth.
         } header: {
             Text("Maintenance")
-        } footer: {
-            Text("Compass calibration: after tapping, turn the Halo slowly in a figure of eight.")
         }
         .disabled(!isReady)
         .listRowBackground(Theme.surface)
@@ -185,7 +186,7 @@ private struct ObservedAdvancedList: View {
             Toggle(isOn: $recordRides) {
                 Label("Record rides", systemImage: "record.circle")
             }
-            if let last = RideRecorder.rides.first {
+            if let last = lastRide {
                 ShareLink(item: last) {
                     Label("Share the last ride", systemImage: "square.and.arrow.up")
                 }
@@ -301,7 +302,6 @@ private struct ObservedAdvancedList: View {
                 Text("The ring only accepts the password this app set during recovery. Save a copy in your password manager: if it's lost, recovering again needs a cold reboot of the ring. iCloud Keychain sync needs iCloud Keychain turned on, and may not work with free-account (SideStore) signing. Another iPhone tries synced passwords automatically.")
             }
             .listRowBackground(Theme.surface)
-            .sheet(isPresented: $showPasswordEntry) { passwordEntrySheet(controller) }
         }
     }
 
