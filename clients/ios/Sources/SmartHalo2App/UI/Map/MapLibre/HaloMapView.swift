@@ -306,6 +306,10 @@ struct HaloMapView: UIViewRepresentable {
         private func applyLayers() {
             guard let map, let style = map.style, appliedLayers != layers else { return }
             appliedLayers = layers
+            // Marked on disk while the style changes: MapLibre throws on a value it refuses, and the next
+            // launch then turns the overlays off instead of stopping again (`recoverFromInterruptedApply`).
+            FileManager.default.createFile(atPath: MapLayerSelection.applyingMarker.path, contents: nil)
+            defer { try? FileManager.default.removeItem(at: MapLayerSelection.applyingMarker) }
             // Start clean: what was there is removed, then what's on is added, ground first.
             for id in [ID.topoLayer, ID.satelliteLayer, ID.hillshadeLayer, ID.cycleLayer, ID.areasLayer] {
                 if let layer = style.layer(withIdentifier: id) { style.removeLayer(layer) }
@@ -339,8 +343,10 @@ struct HaloMapView: UIViewRepresentable {
                 style.addSource(dem)
                 let shade = MLNHillshadeStyleLayer(identifier: ID.hillshadeLayer, source: dem)
                 shade.hillshadeExaggeration = NSExpression(forConstantValue: 0.5)
-                shade.hillshadeShadowColor = NSExpression(forConstantValue: UIColor.black.withAlphaComponent(0.6))
-                shade.hillshadeHighlightColor = NSExpression(forConstantValue: UIColor.white.withAlphaComponent(0.25))
+                // One shadow and one highlight colour per light source since MapLibre 7: arrays, even for
+                // one light. A lone UIColor here throws and stops the app.
+                shade.hillshadeShadowColor = NSExpression(forConstantValue: [UIColor.black.withAlphaComponent(0.6)])
+                shade.hillshadeHighlightColor = NSExpression(forConstantValue: [UIColor.white.withAlphaComponent(0.25)])
                 shade.hillshadeAccentColor = NSExpression(forConstantValue: UIColor.black.withAlphaComponent(0.2))
                 insert(shade)
             }

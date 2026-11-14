@@ -18,6 +18,8 @@ struct SmartHalo2App: App {
     init() {
         // Bridge the protocol layer's log lines into the in-app live console.
         SH2Log.setSink { line in LogStore.shared.appendFromAnywhere(line) }
+        // A MapLibre overlay that stopped the app last time is off before the Map tab draws it again.
+        MapLayerSelection.recoverFromInterruptedApply()
         // Alarm notifications: become the UNUserNotificationCenter delegate before launch finishes,
         // so tapping a notification that cold-launches the app still opens the Halo tab.
         MainActor.assumeIsolated {
