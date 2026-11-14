@@ -236,4 +236,17 @@ extension RouteGeometry {
     public func reversed() -> RouteGeometry {
         RouteGeometry(points: points.reversed(), elevations: elevations.reversed(), navPoints: navPoints.reversed())
     }
+
+    /// The route from `along` metres on, for a ride that rejoins it there (docs/APP_SPEC.md M17): the
+    /// point there (with no elevation of its own), then the points after it. The whole route at or
+    /// before its start; nil at or past its end. The ring navigates the same points.
+    public func suffix(from along: Double) -> RouteGeometry? {
+        guard points.count > 1 else { return nil }
+        guard along > 0 else { return self }
+        guard along < length else { return nil }
+        let i = segmentIndex(at: along)
+        let rest = Array(points[(i + 1)...])
+        return RouteGeometry(points: [coordinate(at: along)] + rest,
+                             elevations: [nil] + Array(elevations[(i + 1)...]))
+    }
 }

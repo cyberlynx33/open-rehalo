@@ -211,9 +211,13 @@ final class RoutedStepsTests: XCTestCase {
         XCTAssertEqual(built.count, 3)
         XCTAssertEqual(texts, [1: "Salida 2 · Carrer Major"])
 
+        // With the exit read from the text, the ring gets its own roundabout glyph and the screen the exit.
+        XCTAssertEqual(built[1].type, NavStepType.roundaboutCounterClockwise)
+        XCTAssertEqual(built[1].maneuver, .roundabout(exit: 2, clockwise: false))
         var e = engine(steps, stretches)
         _ = e.update(RideFix(lat: stretches[0][0].lat, lon: stretches[0][0].lon, speed: 5))
-        XCTAssertEqual(e.snapshot.nextTurn, .straight)
+        XCTAssertEqual(e.snapshot.nextTurn, .roundabout)
+        XCTAssertEqual(e.snapshot.nextTurnExit, 2)
     }
 
     /// However big it is: going round takes 80 m here and 280 m there, for the same way out.
@@ -231,6 +235,79 @@ final class RoutedStepsTests: XCTestCase {
                 stretches, ["At the roundabout, take the third exit"])).steps
             XCTAssertEqual(Double(built[1].angles[0]), -90, accuracy: 15, "radius \(r)")
         }
+    }
+
+    /// The exits for the ring's glyph: the one to take first, then the ones passed on the way to it,
+    /// spread between the entry and the exit (counter-clockwise in right-hand traffic).
+    func testRoundaboutExitAngles() {
+        XCTAssertEqual(RoundaboutExits.angles(exit: 1, angle: 90, clockwise: false), [90])
+        XCTAssertEqual(RoundaboutExits.angles(exit: 2, angle: 0, clockwise: false), [0, 90])
+        XCTAssertEqual(RoundaboutExits.angles(exit: 3, angle: -90, clockwise: false), [-90, 90, 0])
+        XCTAssertEqual(RoundaboutExits.angles(exit: 2, angle: 0, clockwise: true), [0, -90])
+        XCTAssertEqual(RoundaboutExits.angles(exit: 12, angle: 0, clockwise: false).count, RoundaboutExits.maximumExits)
+    }
+
+    /// A typed roundabout (BRouter) needs no text: a ROUNDABOUT step with its exits, and the ring gets
+    /// its own roundabout commands as the rider nears it, blinking once inside.
+    func testATypedRoundaboutDrivesTheRingsRoundabout() {
+        let around = [point(north: 300, east: 0), point(north: 310, east: 12), point(north: 325, east: 12),
+                      point(north: 335, east: 0)]
+        let stretches = [line((0, 0), (300, 0)), around + line((335, 0), (635, 0)).dropFirst()]
+        let steps = [RoutedStep(points: stretches[0], text: "", maneuver: .depart),
+                     RoutedStep(points: stretches[1], text: "", maneuver: .roundabout(exit: 2, clockwise: false)),
+                     RoutedStep(points: [stretches[1].last!, stretches[1].last!], text: "", maneuver: .arrive)]
+        let (built, texts) = NavStepFactory.steps(routed: steps)
+        XCTAssertEqual(built.count, 3)
+        XCTAssertEqual(built[1].type, NavStepType.roundaboutCounterClockwise)
+        XCTAssertTrue(built[1].isRoundabout)
+        XCTAssertEqual(built[1].angles.count, 2)
+        XCTAssertEqual(Double(built[1].angles[0]), 0, accuracy: 20)          // straight through
+        XCTAssertGreaterThan(built[1].roundaboutExitDistance, 20)
+        XCTAssertLessThan(built[1].exit.distance(to: NavLocation(around[3].lat, around[3].lon)), 60)
+        XCTAssertEqual(texts, [1: "Exit 2"])
+
+        var director = NavDirector(routed: steps, title: "Office")
+        _ = director.start(ringConnected: true)
+        var labels: [String] = []
+        var blinking = false
+        let route = RouteGeometry(points: rideAlong(stretches))
+        var along = 0.0
+        while along <= 330 {
+            let p = route.coordinate(at: along)
+            let r = director.update(NavLocation(p.lat, p.lon, accuracy: 5), speed: 5)
+            labels += r.commands.map(\.label)
+            for c in r.commands where c.label == "roundabout" {
+                let bytes = [UInt8](c.data)
+                XCTAssertEqual(bytes[3], Commands.RoundaboutStyle.counterClockwise.rawValue)
+                XCTAssertEqual(bytes.count, 10 + 2 * 2)                        // two exits
+                if bytes[2] == 1 { blinking = true }
+            }
+            along += 5
+        }
+        XCTAssertTrue(labels.contains("roundabout"))
+        XCTAssertTrue(labels.contains("roundaboutOled"))
+        XCTAssertFalse(labels.contains("navAngle"))
+        XCTAssertTrue(blinking)
+
+        var e = engine(steps, stretches)
+        _ = e.update(RideFix(lat: stretches[0][0].lat, lon: stretches[0][0].lon, speed: 5))
+        XCTAssertEqual(e.snapshot.nextTurn, .roundabout)
+        XCTAssertEqual(e.snapshot.nextTurnExit, 2)
+        XCTAssertEqual(e.snapshot.nextTurnText, "Exit 2")
+    }
+
+    /// A typed "keep right" at a shallow fork is a turn, where a text-only step of 12° would merge.
+    func testATypedKeepRightIsKeptHoweverShallow() {
+        let east = 200 * sin(12.0 * .pi / 180), north = 200 * cos(12.0 * .pi / 180)
+        let fork = [line((0, 0), (300, 0)), line((300, 0), (300 + north, east))]
+        let typed = [RoutedStep(points: fork[0], text: "", maneuver: .depart),
+                     RoutedStep(points: fork[1], text: "", maneuver: .keepRight),
+                     RoutedStep(points: [fork[1].last!, fork[1].last!], text: "", maneuver: .arrive)]
+        XCTAssertEqual(NavStepFactory.steps(routed: typed).steps.count, 3)
+        XCTAssertEqual(NavStepFactory.steps(routed: stepsAtEnd(fork, ["Continue"])).steps.count, 2)
+        var e = engine(typed, fork)
+        _ = e.update(RideFix(lat: fork[0][0].lat, lon: fork[0][0].lon, speed: 5))
+        XCTAssertEqual(e.snapshot.nextTurn, .slightRight)
     }
 
     func testRoundaboutTexts() {
@@ -295,11 +372,15 @@ final class RoutedStepsTests: XCTestCase {
     }
 
     func testTheTraceKeepsTheStepsOfARoutedRideOnly() throws {
-        let steps = stepsAtEnd(corner, ["Turn right onto Carrer Major"])
+        var steps = stepsAtEnd(corner, ["Turn right onto Carrer Major"])
+        steps[1].maneuver = .right
         let routed = engine(steps, corner)
         let header = RideTrace.Header(engine: routed, title: "Test", routedSteps: steps)
         let line = try XCTUnwrap(RideTrace.line(header))
         XCTAssertEqual(try JSONDecoder().decode(RideTrace.Header.self, from: line).routedSteps, steps)
+        // A trace from before the manoeuvre types decodes with none.
+        let old = Data("{\"points\":[{\"lat\":41.39,\"lon\":2.16}],\"text\":\"Turn right\",\"caution\":false}".utf8)
+        XCTAssertNil(try JSONDecoder().decode(RoutedStep.self, from: old).maneuver)
 
         let gpx = RideEngine(route: RouteGeometry(points: rideAlong(corner)), title: "Test", settings: .init())
         let plain = try XCTUnwrap(RideTrace.line(RideTrace.Header(engine: gpx, title: "Test")))

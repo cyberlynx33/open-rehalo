@@ -91,7 +91,8 @@ public struct CompassDirector: Sendable {
         }
         currentLocation = fix
 
-        if NavGuidance.stepProgress(destination.distance(to: fix), NavStepType.destination) > 99 {
+        // Arrival as the crow flies: the same radius as a route's (`TurnTiming.arrivalRadius`).
+        if destination.distance(to: fix) <= TurnTiming.arrivalRadius {
             completed = true
             result.commands = [pointerOff] + NavDirector.destinationReached(title: title, settings: settings)
             result.arrived = true

@@ -33,15 +33,21 @@ public struct RouteMatcher: Sendable {
         public var gateSigmas = 3.0
         public var conflictFixes = 3
         public var marginRatio = 0.5
-        // §5.5 Route status
-        public var leaveMinimum = 30.0
-        public var leaveFactor = 2.0
-        public var rejoinExtra = 15.0
-        public var rejoinMinimum = 15.0
-        public var rejoinShare = 0.75
-        public var leaveSeconds = 5.0
-        public var leaveFarFixes = 2
-        public var rejoinSeconds = 3.0
+        // §5.5 Route status, with the hysteresis of docs/APP_SPEC.md M17. Every distance is over the
+        // working accuracy.
+        /// Off the route: further than this for `leaveSeconds`…
+        public var leaveDistance = 60.0
+        public var leaveSeconds = 4.0
+        /// …or further than this riding more than `leaveHeadingAngle` off the route's direction on
+        /// `leaveHeadingFixes` fixes in a row.
+        public var leaveHeadingDistance = 50.0
+        public var leaveHeadingAngle = 60.0
+        public var leaveHeadingFixes = 2
+        /// Back on it: closer than this for `rejoinSeconds` (and `rejoinFixes` fixes); the first join
+        /// of a ride, away from the start, only takes `joinSeconds`.
+        public var rejoinDistance = 20.0
+        public var rejoinSeconds = 10.0
+        public var joinSeconds = 3.0
         public var rejoinFixes = 2
         public var joinAligned = 0.7
         public var joinAnywhere = 0.75
@@ -50,11 +56,11 @@ public struct RouteMatcher: Sendable {
         public var joinReversedSeconds = 5.0
         public var startWindow = 50.0
         public var leadInMargin = 15.0
-        // §7 Arrival and coverage
+        // §7 Arrival and coverage (`TurnTiming`'s arrival rule)
         public var coverageGap = 100.0
         public var coverageDirection = 0.5
-        public var arrivalRadius = 50.0
-        public var arrivalCoverage = 0.10
+        public var arrivalRadius = TurnTiming.arrivalRadius
+        public var arrivalCoverage = TurnTiming.arrivalMinimumShare
         /// On a loop (its end within `startWindow` of its start), the share of the whole loop: a rider
         /// who sets off on the loop's last stretch, heading for its start, hasn't finished it. Not
         /// when the rider chose where to join it (`explicitJoin`): then what is left is the ride.
@@ -126,7 +132,9 @@ public struct RouteMatcher: Sendable {
         case off
         case rejoining(since: Double, fixes: Int)
         case on
-        case leaving(since: Double, farFixes: Int)
+        /// Further than `leaveHeadingDistance`: since when it has been further than `leaveDistance`
+        /// (nil: not that far), and how many fixes in a row the rider has headed away from the route.
+        case leaving(farSince: Double?, headingFixes: Int)
     }
 
     struct Anchor: Equatable {
@@ -231,8 +239,9 @@ public struct RouteMatcher: Sendable {
         if heading == nil, fix.speed >= 2, fix.course >= 0 {
             heading = TravelDirection.Estimate(bearing: fix.course, length: 0)
         }
-        let leave = max(parameters.leaveMinimum, parameters.leaveFactor * a)
-        let rejoin = min(max(a + parameters.rejoinExtra, parameters.rejoinMinimum), parameters.rejoinShare * leave)
+        let leave = parameters.leaveDistance + a
+        let near = parameters.leaveHeadingDistance + a
+        let rejoin = parameters.rejoinDistance + a
 
         // §5.2–5.4: candidates, scores, tracking gate, confidence. The anchor (the last confident or
         // joined match) always scores continuity; it gates, as a hard rule, only while tracking: on the
@@ -278,8 +287,12 @@ public struct RouteMatcher: Sendable {
         } ?? false
         let confident = best.map { $0.distance <= rejoin } ?? false && unambiguous && !gateFailed
 
-        // §5.5: route status.
+        // §5.5: route status. Leaving it takes `leaveSeconds` far from it, or a couple of fixes nearer
+        // but riding away from where it goes (hysteresis, docs/APP_SPEC.md M17).
         if let b = best, (b.sDir ?? 0) >= parameters.joinAnywhere { alignedStreak += 1 } else { alignedStreak = 0 }
+        let headingAway = heading.flatMap { h in
+            best?.direction.map { abs(GeoPoint.angleDelta(from: h.bearing, to: $0)) > parameters.leaveHeadingAngle }
+        } ?? false
         let allowed = best.map { joinAllowed($0, time: fix.time) } ?? false
         switch phase {
         case .off:
@@ -291,8 +304,9 @@ public struct RouteMatcher: Sendable {
             }
         case .rejoining(let since, let fixes):
             if let b = best, b.distance < rejoin, allowed {
+                let wait = joined ? parameters.rejoinSeconds : parameters.joinSeconds
                 if !joined && b.along <= parameters.startWindow
-                    || fix.time - since >= parameters.rejoinSeconds && fixes + 1 >= parameters.rejoinFixes {
+                    || fix.time - since >= wait && fixes + 1 >= parameters.rejoinFixes {
                     becomeOn(b)
                 } else {
                     phase = .rejoining(since: since, fixes: fixes + 1)
@@ -301,17 +315,21 @@ public struct RouteMatcher: Sendable {
                 phase = .off
             }
         case .on:
-            if dMin > leave { phase = .leaving(since: fix.time, farFixes: dMin > 2 * leave ? 1 : 0) }
-        case .leaving(let since, let far):
-            if dMin <= leave {
+            if dMin > near {
+                phase = .leaving(farSince: dMin > leave ? fix.time : nil, headingFixes: headingAway ? 1 : 0)
+            }
+        case .leaving(let farSince, let headingFixes):
+            if dMin <= near {
                 phase = .on
             } else {
-                let farFixes = dMin > 2 * leave ? far + 1 : 0
-                if fix.time - since >= parameters.leaveSeconds || farFixes >= parameters.leaveFarFixes {
+                let far = dMin > leave ? (farSince ?? fix.time) : nil
+                let fixes = headingAway ? headingFixes + 1 : 0
+                let farLongEnough = far.map { fix.time - $0 >= parameters.leaveSeconds } ?? false
+                if farLongEnough || fixes >= parameters.leaveHeadingFixes {
                     phase = .off                    // tracking ends; the anchor still scores the rejoin
                     conflictStreak = 0
                 } else {
-                    phase = .leaving(since: since, farFixes: farFixes)
+                    phase = .leaving(farSince: far, headingFixes: fixes)
                 }
             }
         }
