@@ -7,8 +7,10 @@ import SH2Protocol
 ///
 /// Three steps over the existing `DeviceController` API:
 /// 1. explain → `recover()` (reset-challenge + re-pair; progress, errors with retry);
-/// 2. `.needsReboot`: power-cycle the ring once. `RebootWatcher` notices the ring disappearing and
-///    coming back and calls `reconnectAndFinish()` by itself; "I've rebooted it" is the fallback;
+/// 2. `.needsReboot`: restart the ring once, by plugging a micro-USB cable into its bottom and out
+///    again (`UsbRebootIllustration`; the battery and UART are listed as fallbacks). `RebootWatcher`
+///    notices the ring disappearing and coming back and calls `reconnectAndFinish()` by itself;
+///    "I've rebooted it" is the fallback;
 /// 3. `.ready`: done. The new password isn't shown here (Settings › Advanced keeps it).
 struct RecoveryWizard: View {
     @EnvironmentObject private var connection: HaloConnection
@@ -126,7 +128,7 @@ private struct RecoveryWizardContent: View {
                     .font(.system(size: 80, weight: .regular))
                     .foregroundStyle(Theme.info)
             case 2:
-                PulsingSymbol(systemName: "arrow.counterclockwise.circle", color: Theme.warn, size: 88)
+                UsbRebootIllustration()
             default:
                 Image(systemName: "checkmark")
                     .font(.system(size: 80, weight: .bold))
@@ -151,7 +153,7 @@ private struct RecoveryWizardContent: View {
     private var message: LocalizedStringKey {
         switch step {
         case 1: return "This Halo has a password this iPhone doesn't know, probably from the old app. We'll reset it and give it this iPhone's password, kept in your Keychain."
-        case 2: return "The Halo is un-paired. Due to a firmware quirk it keeps its old password until it restarts once: disconnect and reconnect the battery, or let it drain. Wait here — we'll notice when it comes back."
+        case 2: return "The Halo is un-paired. Due to a firmware quirk it keeps its old password until it restarts once: plug a micro-USB cable into the bottom of the Halo and unplug it again. Wait here — we'll notice when it comes back."
         default: return "Your Halo is yours again. Its password is kept in this iPhone's Keychain."
         }
     }
@@ -185,6 +187,10 @@ private struct RecoveryWizardContent: View {
 
         if step == 2 {
             VStack(alignment: .leading, spacing: Theme.Space.m) {
+                rebootOption("Plug in a micro-USB cable — easiest",
+                             "Plug a charging cable into the port on the bottom of the Halo, then unplug it. The Halo restarts when power comes in.",
+                             systemImage: "cable.connector")
+                Divider().overlay(Theme.stroke)
                 rebootOption("Disconnect the battery — cleanest",
                              "Open the ring (gentle heat to soften the adhesive + plastic picks, go along the seam). Unplug the battery connector, wait ~10 s, plug it back in.")
                 Divider().overlay(Theme.stroke)
@@ -203,9 +209,10 @@ private struct RecoveryWizardContent: View {
         }
     }
 
-    private func rebootOption(_ title: LocalizedStringKey, _ detail: LocalizedStringKey) -> some View {
+    private func rebootOption(_ title: LocalizedStringKey, _ detail: LocalizedStringKey,
+                              systemImage: String = "bolt.circle") -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label(title, systemImage: "bolt.circle")
+            Label(title, systemImage: systemImage)
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(Theme.text)
             Text(detail)
@@ -376,26 +383,5 @@ final class RebootWatcher: ObservableObject {
         if task != nil { central?.stopScan() }
         task?.cancel()
         task = nil
-    }
-}
-
-/// An SF Symbol that gently pulses (static with Reduce Motion).
-struct PulsingSymbol: View {
-    let systemName: String
-    let color: Color
-    var size: CGFloat = 80
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dim = false
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: size, weight: .regular))
-            .foregroundStyle(color)
-            .opacity(dim && !reduceMotion ? 0.4 : 1)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { dim = true }
-            }
     }
 }

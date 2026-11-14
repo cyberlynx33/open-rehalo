@@ -300,9 +300,10 @@ ride recording, auto light/alarm automations.
   (Combine subject) fires when a `pair(with:)` handshake ends in `.needsRecovery` → `RootView`
   opens the wizard; the onboarding's pair step advances to Permissions as soon as the state turns
   `.connected` (directly or after the wizard). Steps: 1 explain → `recover()` (progress, error →
-  "Try again" = `reconnectAndFinish()`), 2 reboot (the existing battery / drain / UART options)
-  with `RebootWatcher` — releases the link, scans in 5 s windows and, once the ring has been
-  missing for a whole window and is seen again, calls `reconnectAndFinish()` itself; "I've
+  "Try again" = `reconnectAndFinish()`), 2 reboot (`UsbRebootIllustration` loops a micro-USB cable
+  plugging into the ring's bottom; options micro-USB / battery / drain / UART) with
+  `RebootWatcher` — releases the link, scans in 5 s windows and, once the ring has been missing
+  for a whole window and is seen again, calls `reconnectAndFinish()` itself; "I've
   rebooted it" is the manual fallback; a ring that never disappears never auto-triggers — and 3
   done. The password is no longer shown on the Halo tab (`NewPasswordCard` removed); Advanced ›
   Device password keeps it. **Demo:** `DeviceController.simulateNeedsRecovery()` + demo branches
