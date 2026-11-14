@@ -492,12 +492,92 @@ a real road-bike profile (needs another router, e.g. Valhalla's `bicycle_type`).
 **Not verified on a phone:** whether Apple returns alternatives by bike, how good Road is, whether `.cycling` works
 on iOS 17–25, which end Apple's instructions belong to, and whether `hasHighways` covers Spanish autovías.
 
+### M17 — Time-based guidance, BRouter, MapLibre and offline maps
+
+Four pieces, each usable without the next: the ring's guidance announces turns by time; routes can come
+from a BRouter server of the rider's; a second map engine, MapLibre, with free layers; and offline areas
+for it. Apple Maps stays the default map engine until MapLibre has been tried on a phone.
+
+**Guidance (`SH2Nav`, `TurnTiming`).** The arc used to run from 95 m to 20 m whatever the speed. Now
+every notice is `seconds × max(speed, 1 m/s) + 7 m`, the speed from `CLLocation.speed`:
+
+| Phase | Seconds to the manoeuvre | Ring |
+| --- | --- | --- |
+| Far | > 60 | nothing |
+| Upcoming | 60–30 | the next turn is known, no arc |
+| Prepare | 30–14 | the arc appears and fills |
+| Approach | 14–10 | still filling |
+| Order | ≤ 10 | full arc, turn sound |
+
+- Two manoeuvres under `32 × speed` metres apart are chained: the second arc rides behind the first.
+- An arc never empties because the rider slowed down (`heldProgress`).
+- Fixes worse than 40 m don't guide. `GPSQuality`: weak after 30 s without a good fix, lost after 60 s
+  (a pill on the Navigating screen; the clock keeps it moving when no fix comes at all).
+- Off route (matched engine, `RouteMatcher`): further than 60 m + accuracy for 4 s, or further than 50 m
+  + accuracy riding more than 60° off the route's direction on 2 fixes in a row. Back on it after 10 s
+  within 20 m + accuracy; the first join of a ride takes 3 s. The wrong-way detector, the arc back onto
+  the route and the orange pointer stay as they were.
+- Arrival: within 40 m of the end with more than 10 % of the route ridden (half of a loop). The
+  destination's ring fills from 160 m.
+- Typed manoeuvres: `RoutedStep.maneuver` (`RoutedManeuver`: straight, slight / normal / sharp turns,
+  keep left / right, U-turn, roundabout with exit and direction). A roundabout with a known exit is a
+  ROUNDABOUT step: the ring gets `roundabout {1,20}` with the exits' angles (`RoundaboutExits`: the one
+  to take first, the others spread from the entry) and `roundaboutOled {1,34}`; Apple's text ("take the
+  second exit") still gives the exit, so Apple routes get the glyph too. The classic engine keeps the
+  official off-route rules; it shares the timing and the arrival rule.
+
+**Routing (`RouteProvider`).** `BRouterRouteProvider` calls `<base>/brouter?lonlats=…&profile=…
+&alternativeidx=…&format=geojson&timode=2` (`BRouterRequest`), the base URL from Settings › Advanced ›
+BRouter server (BRouter itself, `http://localhost:17777`, or a proxy such as sh2-server's
+`https://server.example.org/routing/brouter`; the base's own path is kept). When the base is the rider's
+own sh2-server and they are logged in, the request carries `Authorization: Bearer <access token>`,
+refreshed once on a 401. `BRouterRoute` reads the GeoJSON: coordinates with elevation, `voicehints`
+`[index, command, exit, distance, angle]` into typed steps. Profiles: City `trekking`, Road `fastbike`,
+Gravel `gravel`, MTB `mtb`; stops are more `lon,lat` pairs (Apple: leg by leg). `AppleRouteProvider`
+wraps `MKDirections`: City and Gravel ask for bike routes (no silent fall to a walking route any more:
+the error shows), Road for car routes without motorways, MTB for walking routes, and the rider is told
+("Calculated with Apple Maps: no gravel profile, using City."). `RoutingService` picks BRouter when set
+and answering, else Apple with a notice saying why. Off the route with BRouter set, `GuidanceController`
+asks for a leg from the rider to the route 300 m ahead of where they left it and the ride carries on
+along it (`RideEngine.rerouted`: the leg's typed steps plus what is left of the route's); a failed
+request waits 30 s, doubling to 8 min (`RerouteBackoff`). A saved destination keeps its elevation
+(`<ele>` in the GPX) and its typed steps (`<uuid>.steps.json` next to it), so riding it again has the
+same manoeuvres.
+
+**Map engine (Settings › Advanced › Map engine: Apple Maps / MapLibre (beta)).** `HaloMapView`
+(`UIViewRepresentable` over `MLNMapView`, MapLibre Native iOS 7.0.0 by SPM) serves the Map tab,
+Navigating and the route detail when chosen; the 3D route view stays on MapKit (MapLibre Native has no
+3D terrain). Base styles from OpenFreeMap: Night (`dark`) and Day (`liberty`). Layers, in a sheet:
+Topo IGN (WMTS MTN) and Satellite (WMTS PNOA), CC BY 4.0, under the labels; shaded relief from
+Mapterhorn's Terrarium tiles (`MLNRasterDEMSource` + `MLNHillshadeStyleLayer`); CyclOSM's lite overlay,
+online only; the downloaded areas' outlines. The route is one GeoJSON source with the halo, the lime
+line and direction arrows along it; start, finish, stops and the destination are a symbol layer. The
+Navigating camera is `FollowCamera`'s, applied to `MLNMapView` at display rate, the rider an annotation
+view hosting `RiderMarker`. Attribution: MapLibre's (i) button plus `MapAttributionBar` on the map.
+Thumbnails: `MLNMapSnapshotter` (`MapLibreSnapshot`) when MapLibre is the engine.
+
+**Offline (`OfflineMapStore`, Settings › Advanced › Offline maps).** Saving a route downloads a 1 km
+corridor round it (a chain of squares every 500 m) at zoom 1–14 as an `MLNShapeOfflineRegion`, plus a
+world pack (zoom 0–1) per style for the style, glyphs and sprites. OpenFreeMap's terms (3,000 tiles or
+50 MB per download, 4 connections) are kept: a corridor over the tile estimate isn't downloaded, a
+download over the bytes is stopped, `MapLibreSetup` caps the connections. Settings: Wi-Fi only (default
+on), Save the map with each route (default on). The screen lists the areas with size and state, swipe
+to delete or update. The raster layers aren't part of the packs (they're added at run time).
+
+**Not done:** PMTiles regions from a URL of the rider's (large areas), raster layers offline, a pixel
+ratio setting (iOS packs download at the device's scale), stops in the UI (the providers take them),
+elevation for Apple routes.
+
+**Not verified on a phone:** everything MapLibre draws (the style URLs, the WMTS templates, the
+hillshade look, the annotation's rotation at 60 fps), the roundabout glyph's direction on the ring
+(counter-clockwise for right-hand traffic is the assumption), and BRouter's `timode=2` voice hints
+against a real server.
+
 **Post-MVP backlog (from UX_DESIGN §9):** home widget + Control Center control (needs a BLE-from-intent
-spike), live ride recording + "Rides" history, fitness goals, Strava, online rerouting, optional
-automations.
+spike), live ride recording + "Rides" history, fitness goals, Strava, optional automations.
 
 ### Deferred across the board
-Real **OTA/DFU flashing**, **online rerouting**, **iOS→ring forwarding of app notifications** (iOS has no
+Real **OTA/DFU flashing**, **iOS→ring forwarding of app notifications** (iOS has no
 NotificationListener equivalent and the firmware has no ANCS client; calls are covered by M13), **live
 GPS ride recording**, **Strava linking** (needs OAuth + Strava app keys). These need external APIs,
 entitlements, or large UIs.

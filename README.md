@@ -38,12 +38,20 @@ and App Store and Google Play releases are planned.
 
 <sub>Screenshots from demo mode, which simulates the ring.</sub>
 
-Everything that touches the ring runs over Bluetooth. A self-hosted server is optional. Maps, search
-and directions use Apple Maps and need internet.
+Everything that touches the ring runs over Bluetooth. A self-hosted server is optional. Search uses
+Apple Maps. Maps and directions use Apple Maps by default, or MapLibre and a BRouter server of your own
+(Settings › Advanced).
 
-- **Navigation:** import a GPX route or search for a place (City, Road or Trails profile), and get
-  turn guidance on the ring. Compass mode points at your destination. Includes a Live Activity and a
-  3D route view.
+- **Navigation:** import a GPX route or search for a place (City, Road, Gravel or MTB profile), and get
+  turn guidance on the ring, timed by your speed. Compass mode points at your destination. Includes a
+  Live Activity and a 3D route view.
+- **Bike routing with BRouter:** set the URL of a [BRouter](https://github.com/abrensch/brouter) server
+  (yours, or through your sh2-server) and routes come with elevation, roundabouts and real bike
+  profiles; when you leave the route, a way back is asked for. Without one, Apple Maps routes, and the
+  app says so.
+- **MapLibre map (beta):** OpenStreetMap data from OpenFreeMap in a night or day style, with Spain's IGN
+  topo and satellite layers, shaded relief (Mapterhorn) and CyclOSM's cycle network, and offline areas
+  downloaded with each saved route.
 - **Alarm:** arms when you leave and disarms when your iPhone returns, with a five-tap code on the ring.
 - **Ring cards and shortcuts:** clock, battery, speed, distance, ride time and average speed, plus tap
   shortcuts for the horn, the light and quick readings.
@@ -53,8 +61,8 @@ and directions use Apple Maps and need internet.
 - **Ring recovery:** reclaim a ring whose password was lost. Passwords are kept in your Keychain.
 - **Demo mode:** explore the app without a ring.
 
-**Not implemented:** firmware updates over the air, online rerouting, app notifications on the ring,
-ride recording, and Strava or Apple Health sync.
+**Not implemented:** firmware updates over the air, app notifications on the ring, ride recording,
+Strava or Apple Health sync, and large offline regions (PMTiles).
 
 ## What's in here
 
