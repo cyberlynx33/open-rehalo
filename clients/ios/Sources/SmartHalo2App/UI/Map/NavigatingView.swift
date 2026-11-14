@@ -46,6 +46,14 @@ struct NavigatingView: View {
             VStack(spacing: 0) {
                 topArea
                 Spacer(minLength: 0)
+                if settings.mapEngine == .mapLibre {
+                    HStack {
+                        MapAttributionBar(layers: MapLayerSelection.stored)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Theme.Space.l)
+                    .padding(.bottom, Theme.Space.xs)
+                }
                 bottomPanel
             }
         }
@@ -71,9 +79,15 @@ struct NavigatingView: View {
         }
     }
 
-    private var map: some View {
-        NavMap(follow: follow, route: guidance.route, routeRevision: guidance.routeRevision,
-               startHeading: guidance.heading, orientation: $orientation, freeHeading: $freeHeading)
+    /// The follow-camera map on the engine of Settings (docs/APP_SPEC.md M17).
+    @ViewBuilder private var map: some View {
+        if settings.mapEngine == .mapLibre {
+            LibreNavMap(follow: follow, route: guidance.route, routeRevision: guidance.routeRevision,
+                        startHeading: guidance.heading, orientation: $orientation, freeHeading: $freeHeading)
+        } else {
+            NavMap(follow: follow, route: guidance.route, routeRevision: guidance.routeRevision,
+                   startHeading: guidance.heading, orientation: $orientation, freeHeading: $freeHeading)
+        }
     }
 
     private func feedFix() {
@@ -129,12 +143,21 @@ struct NavigatingView: View {
                                ignore: { guidance.ignoreWrongWay() })
             }
             HStack(alignment: .top) {
-                if guidance.simulated {
-                    NavPill(systemImage: "location.circle", text: "Simulated GPS", color: Theme.info)
-                } else if !guidance.hasFix {
-                    NavPill(systemImage: "location.magnifyingglass", text: "Waiting for GPS…", color: Theme.warn)
-                } else if orientation == .compass {
-                    CompassPill(follow: follow)
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    if guidance.simulated {
+                        NavPill(systemImage: "location.circle", text: "Simulated GPS", color: Theme.info)
+                    } else if !guidance.hasFix {
+                        NavPill(systemImage: "location.magnifyingglass", text: "Waiting for GPS…", color: Theme.warn)
+                    } else if guidance.gpsQuality == .lost {
+                        NavPill(systemImage: "location.slash", text: "GPS lost", color: Theme.warn)
+                    } else if guidance.gpsQuality == .weak {
+                        NavPill(systemImage: "location.magnifyingglass", text: "Weak GPS", color: Theme.warn)
+                    } else if orientation == .compass {
+                        CompassPill(follow: follow)
+                    }
+                    if guidance.rerouting {
+                        NavPill(systemImage: "arrow.triangle.2.circlepath", text: "Finding a way back…", color: Theme.info)
+                    }
                 }
                 Spacer(minLength: 0)
                 VStack(spacing: Theme.Space.s) {
@@ -171,8 +194,16 @@ struct NavigatingView: View {
             }
         } else {
             TurnBanner(kind: guidance.nextTurn, distance: fmt.distance(guidance.nextTurnDistance),
-                       instruction: guidance.nextTurnText)
+                       instruction: turnInstruction)
         }
+    }
+
+    /// The banner's line: a roundabout with a known exit says which (localized), else the street.
+    private var turnInstruction: String? {
+        if guidance.nextTurn == .roundabout, let exit = guidance.nextTurnExit {
+            return String(localized: "Take exit \(exit)")
+        }
+        return guidance.nextTurnText
     }
 
     // MARK: Bottom: metrics, progress, controls
@@ -350,6 +381,77 @@ private struct NavMap: View {
             orientation = .free
         } else {
             follow.resume(from: cam)
+        }
+    }
+}
+
+/// `NavMap` on MapLibre (`HaloMapView`): the follow camera drives `MLNMapView` at display rate and
+/// the rider rides along as an annotation; a pinch keeps following at the new distance, a turn or a
+/// move sets the map Free. The layers are the Map tab's.
+private struct LibreNavMap: View {
+    @ObservedObject var follow: FollowCamera
+    let route: GPXRoute?
+    let routeRevision: Int
+    let startHeading: Double
+    @Binding var orientation: MapOrientation
+    @Binding var freeHeading: Double
+
+    @AppStorage(MapLayerSelection.storageKey) private var layers = MapLayerSelection()
+    @State private var move: HaloMapMove?
+    @State private var live = LiveMapCamera()
+    @State private var userDriving = false
+
+    var body: some View {
+        HaloMapView(layers: layers,
+                    content: HaloMapContent(route: route, routeRevision: routeRevision),
+                    move: move, allowsPitch: false,
+                    follow: follow, followEnabled: orientation != .free && !follow.paused,
+                    live: live, onEvent: handle)
+            .onAppear {
+                follow.orientation = orientation
+                if let start = route?.start, follow.rider == nil {
+                    move = HaloMapMove(.camera(HaloMapCamera(center: start, distance: follow.distance,
+                                                             heading: orientation == .north ? 0 : startHeading)),
+                                       animated: false)
+                }
+            }
+            .onChange(of: orientation) { old, new in
+                follow.orientation = new
+                if new == .free {
+                    follow.paused = true
+                    freeHeading = live.camera?.heading ?? 0
+                } else if old == .free {
+                    follow.resume(center: live.camera?.center, heading: live.camera?.heading)
+                }
+            }
+    }
+
+    private func handle(_ event: HaloMapEvent) {
+        switch event {
+        case .gestureBegan:
+            follow.paused = true
+            userDriving = true
+        case .cameraSettled(let cam, let byUser):
+            if orientation == .free { freeHeading = cam.heading }
+            if byUser { settle(cam) }
+        case .tap, .longPress, .trackingChanged, .styleLoaded:
+            break
+        }
+    }
+
+    /// A gesture ended: a zoom alone keeps following at the new distance; a turn or a move of more
+    /// than a little sets the map Free (as `NavMap.settle`).
+    private func settle(_ cam: HaloMapCamera) {
+        guard userDriving else { return }
+        userDriving = false
+        follow.distance = min(5000, max(150, cam.distance))
+        guard orientation != .free else { return }
+        let turned = abs(Geo.angleDelta(from: follow.cameraHeading, to: cam.heading)) > 8
+        let moved = follow.rider.map { Geo.distance($0, cam.center) > cam.distance * 0.15 } ?? false
+        if turned || moved {
+            orientation = .free
+        } else {
+            follow.resume(center: cam.center, heading: cam.heading)
         }
     }
 }

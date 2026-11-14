@@ -12,6 +12,7 @@ enum HaloRoute: Hashable {
     case ringWidgets, display, fitness
     case soundTouch, liveLog
     case login, rides
+    case offlineMaps
 }
 
 /// App-wide navigation state, so any screen (the chip, a route's "Navigate" button, a notification

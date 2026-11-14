@@ -7,6 +7,7 @@ enum RouteSource: String, CaseIterable {
     case shared          // "Open in…" / share sheet from an app we couldn't identify
     case demo            // the bundled DemoRoute.gpx
     case appleMaps = "applemaps"   // a destination routed by Apple Maps, saved from the Map tab
+    case brouter                   // a destination routed by the rider's BRouter server
     case wikiloc, komoot, strava, garmin
     case rideWithGPS = "ridewithgps"
 
@@ -16,6 +17,7 @@ enum RouteSource: String, CaseIterable {
         case .shared: return String(localized: "Shared")
         case .demo: return String(localized: "Included")
         case .appleMaps: return "Apple Maps"
+        case .brouter: return "BRouter"
         case .wikiloc: return "Wikiloc"
         case .komoot: return "Komoot"
         case .strava: return "Strava"

@@ -104,14 +104,17 @@ final class RouteLibrary: ObservableObject {
     }
 
     /// Import GPX bytes. `name` overrides the GPX `<name>` (used for the localized demo name).
+    /// `steps`: a routed destination's typed steps, kept next to the GPX so riding the saved route
+    /// again has its manoeuvres (docs/APP_SPEC.md M17).
     @discardableResult
-    func importGPX(data: Data, fallbackName: String, source: RouteSource, name: String? = nil) async throws -> SavedRoute {
+    func importGPX(data: Data, fallbackName: String, source: RouteSource, name: String? = nil,
+                   steps: [RoutedStep] = []) async throws -> SavedRoute {
         importsInFlight += 1
         defer { importsInFlight -= 1 }
         let prepared = try await Task.detached(priority: .userInitiated) {
             try Self.prepare(data: data, fallbackName: fallbackName, source: source)
         }.value
-        return try await store(prepared, name: name)
+        return try await store(prepared, name: name, steps: steps)
     }
 
     /// Add (or find) the bundled demo route "Demo route · City centre". Nil if the app has no
@@ -156,7 +159,7 @@ final class RouteLibrary: ObservableObject {
     }
 
     /// On the main actor: dedupe by hash, write the file (off it), insert the metadata.
-    private func store(_ prepared: PreparedImport, name: String?) async throws -> SavedRoute {
+    private func store(_ prepared: PreparedImport, name: String?, steps: [RoutedStep] = []) async throws -> SavedRoute {
         let hash = prepared.hash
         if let existing = fetchOne(#Predicate<SavedRoute> { $0.contentHash == hash }) { return existing }
 
@@ -169,6 +172,9 @@ final class RouteLibrary: ObservableObject {
         if let existing = fetchOne(#Predicate<SavedRoute> { $0.contentHash == hash }) {
             try? FileManager.default.removeItem(at: fileURL)
             return existing
+        }
+        if !steps.isEmpty, let encoded = try? JSONEncoder().encode(steps) {
+            try? encoded.write(to: Self.stepsURL(forFileName: fileName), options: .atomic)
         }
 
         let parsed = prepared.route
@@ -185,7 +191,22 @@ final class RouteLibrary: ObservableObject {
         isEmpty = false
         routeCache[id] = route
         Task { await ensureThumbnail(for: saved) }
+        // The map of its corridor, for the MapLibre engine when the rider wants it (M17).
+        OfflineMapStore.shared.downloadIfWanted(route: route, name: displayName, style: MapLayerSelection.stored.base)
         return saved
+    }
+
+    // MARK: - Typed steps (routed destinations)
+
+    /// The typed steps saved next to a route's GPX (`<uuid>.steps.json`); empty for a plain GPX.
+    func routedSteps(for saved: SavedRoute) -> [RoutedStep] {
+        guard let data = try? Data(contentsOf: Self.stepsURL(forFileName: saved.fileName)),
+              let steps = try? JSONDecoder().decode([RoutedStep].self, from: data) else { return [] }
+        return steps
+    }
+
+    static func stepsURL(forFileName fileName: String) -> URL {
+        directory.appendingPathComponent((fileName as NSString).deletingPathExtension + ".steps.json")
     }
 
     // MARK: - Queries
@@ -227,6 +248,7 @@ final class RouteLibrary: ObservableObject {
     func delete(_ saved: SavedRoute) {
         let id = saved.id
         try? FileManager.default.removeItem(at: fileURL(for: saved))
+        try? FileManager.default.removeItem(at: Self.stepsURL(forFileName: saved.fileName))
         routeCache[id] = nil
         imageCache[id] = nil
         if RouteSelection.shared.route?.id == id { RouteSelection.shared.clear() }
@@ -253,7 +275,7 @@ final class RouteLibrary: ObservableObject {
     func select(_ saved: SavedRoute, navigate: Bool = false) -> Bool {
         guard let route = route(for: saved) else { return false }
         markUsed(saved)
-        RouteSelection.shared.select(route, subtitle: saved.sourceLabel, navigate: navigate)
+        RouteSelection.shared.select(route, subtitle: saved.sourceLabel, steps: routedSteps(for: saved), navigate: navigate)
         return true
     }
 
@@ -296,9 +318,13 @@ final class RouteLibrary: ObservableObject {
         }
     }
 
-    /// Dark, muted map snapshot of the route with the polyline drawn in accent (JPEG data).
+    /// Dark, muted map snapshot of the route with the polyline drawn in accent (JPEG data), on the
+    /// map engine of Settings: MapLibre's night style (`MapLibreSnapshot`) or MapKit's.
     static func snapshot(_ route: GPXRoute, side: CGFloat = 180) async -> Data? {
         guard route.points.count > 1 else { return nil }
+        if AppSettings.shared.mapEngine == .mapLibre {
+            return await MapLibreSnapshot.thumbnail(route, side: side, style: MapLayerSelection.stored.base)
+        }
         let options = MKMapSnapshotter.Options()
         options.mapRect = squareRect(route.boundingMapRect(padding: 0.12))
         options.size = CGSize(width: side, height: side)
