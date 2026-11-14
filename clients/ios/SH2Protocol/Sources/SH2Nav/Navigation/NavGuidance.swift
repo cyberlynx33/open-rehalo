@@ -78,12 +78,17 @@ public struct NavMatch: Equatable, Sendable {
 
 /// `smarthalo::SHGuidance` in GPX mode (`NavigationMode.OfflineTurnByTurn`, `processOfflineStepByStep`),
 /// with the parts of `NavigationState` and `SHRerouteSystem` it uses. Feed it every GPS fix with
-/// `update(_:)`, then read `display`, `sound`, `offlineStatus` and the bearings — that is what the
-/// official app's Java side does on each fix (`NavDirector` that part).
+/// `update(_:speed:)`, then read `display`, `sound`, `offlineStatus` and the bearings — that is what
+/// the official app's Java side does on each fix (`NavDirector` that part).
 ///
 /// Steps are value copies in the original (`getSteps()` returns a copy every fix), so no per-step
 /// state survives a fix — `isStepComplete` can never fire; turns complete through
 /// `validateTurnCompleteStateFromBearing`. This keeps that behaviour.
+///
+/// Departures from the original (docs/APP_SPEC.md M17): the arc's timing comes from `TurnTiming`
+/// (seconds to the manoeuvre at the rider's speed) instead of fixed 95 → 20 m; an arc never empties
+/// again because the rider slowed down (`heldProgress`); arrival is 40 m from the end with a share of
+/// the route ridden; roundabout steps carry their exits for the ring's own glyph.
 public struct NavGuidance: Sendable {
     public let steps: [NavStep]
     public let destination: NavLocation
@@ -134,6 +139,16 @@ public struct NavGuidance: Sendable {
     var pendingStep: Int?
     var pendingCount = 0
 
+    // Addition: time-based notices (docs/APP_SPEC.md M17).
+    /// The thresholds for the fix being processed, at the rider's speed.
+    public private(set) var timing = TurnTiming(speed: nil)
+    /// The highest progress the current arc has reached: a rider who slows down before the turn
+    /// keeps the arc where it was instead of watching it empty.
+    var heldProgress = 0
+    /// Off the path and heading back to it, the arc onto the route appears within this distance, as
+    /// in the original, and fills up to the order distance.
+    static let rejoinArcDistance = 95.0
+
     /// `SHGuidance(Location const&, std::string const& gpx)`.
     public init(start: NavLocation, steps: [NavStep]) {
         self.steps = steps
@@ -171,8 +186,10 @@ public struct NavGuidance: Sendable {
 
     // MARK: - Per fix
 
-    /// `SHGuidance::updateState` (offline mode).
-    public mutating func update(_ fix: NavLocation) {
+    /// `SHGuidance::updateState` (offline mode). `speed`: the fix's ground speed, m/s (nil or
+    /// negative = unknown), which scales when the manoeuvres are announced (`TurnTiming`).
+    public mutating func update(_ fix: NavLocation, speed: Double? = nil) {
+        timing = TurnTiming(speed: speed)
         bearing.update(fix)
         processOfflineStepByStep(fix)
     }
@@ -198,13 +215,14 @@ public struct NavGuidance: Sendable {
         display.thisTurn.stepType = NavStepType.standard
         let next = steps[currentStepIndex + 1]
         let remaining = ClosestPathLocation(loc, steps[currentStepIndex].path).distanceRemaining
-        let short = next.type == NavStepType.destination ? 50.0 : 25.0
+        let short = next.type == NavStepType.destination ? TurnTiming.arrivalRadius : TurnTiming.oledShortfall
         display.distanceToThisManeuver = NavMath.trunc(max(remaining - short, 0))
     }
 
     /// Addition (matched engine): one fix with what the matcher made of it. A fix the matcher ignored
     /// (`.hold`) only feeds the bearing: the ring keeps what it shows.
-    public mutating func update(_ fix: NavLocation, match: NavMatch) {
+    public mutating func update(_ fix: NavLocation, match: NavMatch, speed: Double? = nil) {
+        timing = TurnTiming(speed: speed)
         bearing.update(fix)
         guard match.status != .hold else { return }
         processOfflineStepByStep(fix, match)
@@ -270,10 +288,13 @@ public struct NavGuidance: Sendable {
         return done
     }
 
-    /// The original `processIncompleteStep`.
+    /// The original `processIncompleteStep`, on `TurnTiming`'s distances: the arc appears at the
+    /// prepare distance (the destination's ring at the arrival notice) and, once it has, stays until
+    /// the step completes, however the speed changes.
     mutating func processIncompleteStepOfficial(_ dist: Double, _ step: NavStep, _ loc: NavLocation) -> Bool {
         let wasAnimating = display.isStepAnimationNow
-        display.isStepAnimationNow = dist < (step.type == NavStepType.destination ? 105 : 95) || turnStarted
+        let notice = step.type == NavStepType.destination ? TurnTiming.arrivalNoticeDistance : timing.prepareDistance
+        display.isStepAnimationNow = dist < notice || turnStarted || stepAnimationStarted
         if wasAnimating && !display.isStepAnimationNow
             && display.currentType != .pointer && display.currentType != .none {
             display.typesToRemove.append(.angle)
@@ -285,37 +306,43 @@ public struct NavGuidance: Sendable {
         }
 
         if step.type == NavStepType.destination {
-            let p = Self.stepProgress(dist, step.type)
+            let p = turnProgress(dist, step.type)
             display.currentType = .destination
             var t = NavTurn()
             t.turnProgress = p
             t.stepType = NavStepType.destination
             display.thisTurn = t
-            display.distanceToThisManeuver = NavMath.trunc(max(dist - 50, 0))
+            display.distanceToThisManeuver = NavMath.trunc(max(dist - TurnTiming.arrivalRadius, 0))
             display.progress = p
             display.description = step.instructionText
             display.thisStreetName = step.streetName
             return false
         }
 
-        let p = Self.stepProgress(dist, step.type)
+        let p = turnProgress(dist, step.type)
         if p >= 100 && !turnStarted { sound = .turnNow; turnStarted = true }
 
         if step.isRoundabout {
             display.progress = p
             display.currentType = turnStarted ? .enteredRoundabout : .enteringRoundabout
-            display.distanceToThisManeuver = NavMath.trunc(max(dist - 25, 0))
+            display.distanceToThisManeuver = NavMath.trunc(max(dist - TurnTiming.oledShortfall, 0))
             display.distanceToNextManeuver = NavMath.trunc(step.roundaboutExitDistance)
             display.description = step.instructionText
             display.thisStreetName = step.streetName
             display.roundaboutExitStreetName = step.roundaboutExitStreetName
+            // Addition: the exits for the ring's glyph (`Commands.roundabout`), the one to take first.
+            display.roundaboutAngles = step.angles
+            display.thisTurn.relativeTurnAngle = step.angles.first ?? 0
+            display.thisTurn.relativeToNorthAngle = step.headingAfter
+            display.thisTurn.turnProgress = p
+            display.thisTurn.mode = step.mode
             return Self.roundaboutComplete(step.exit, step.headingAfter, turnStarted, loc)
         }
 
         let n = steps.count
         let thisCaution = currentStepIndex < n - 1 && steps[currentStepIndex + 1].mode == 1
         display.thisTurn.turnProgress = p
-        display.distanceToThisManeuver = NavMath.trunc(max(dist - 25, 0))
+        display.distanceToThisManeuver = NavMath.trunc(max(dist - TurnTiming.oledShortfall, 0))
         angleTurnProgressData(loc)
         let nextCaution = currentStepIndex + 2 < n && steps[currentStepIndex + 2].mode == 1
         if !nextTurnAnimationStarted && display.nextTurn.turnProgress >= 1 {
@@ -335,7 +362,7 @@ public struct NavGuidance: Sendable {
     /// `processStepComplete`.
     mutating func processStepComplete(_ step: NavStep) {
         let n = steps.count
-        let quick = currentStepIndex + 2 < n && Self.quickTurnDisplayed(step, steps[currentStepIndex + 2])
+        let quick = currentStepIndex + 2 < n && quickTurnDisplayed(step, steps[currentStepIndex + 2])
         if !quick && step.type != NavStepType.destination {
             display.typesToRemove.append(.angle)
             display.currentType = .none
@@ -344,6 +371,8 @@ public struct NavGuidance: Sendable {
         if !nextTurnAnimationStarted { stepAnimationStarted = false }
         turnStarted = false
         nextTurnAnimationStarted = false
+        // A chained turn's arc carries on from where the second arc was.
+        heldProgress = quick ? display.nextTurn.turnProgress : 0
         bearing.clearCurrent()
         if currentStepIndex + 1 < n { display.incrementCurrentStep = true }
     }
@@ -416,6 +445,7 @@ public struct NavGuidance: Sendable {
         turnStarted = false
         stepAnimationStarted = false
         nextTurnAnimationStarted = false
+        heldProgress = 0
         display.thisTurn = NavTurn()
         display.nextTurn = NavTurn()
         bearing.clearCurrent()
@@ -462,13 +492,14 @@ public struct NavGuidance: Sendable {
             if !nextTurnAnimationStarted { display.typesToRemove.append(.angle) }
             if headingToPath { bearing.clearCurrent() }
             stepAnimationStarted = false
+            heldProgress = 0
             display.currentType = .none
-        } else if d < 95 && headingToPath {
+        } else if d < Self.rejoinArcDistance && headingToPath {
             if display.currentType == .pointer { display.typesToRemove.append(.pointer) }
             display.thisTurn = NavTurn()
             display.nextTurn = NavTurn()
             display.nextTurn.stepType = NavStepType.standard
-            display.thisTurn.turnProgress = Self.stepProgressWithDistance(d)
+            display.thisTurn.turnProgress = rejoinProgress(d)
             if match == nil && target.distance(to: next.entrance) < 5 {
                 currentStepIndex += 1
                 if currentStepIndex < steps.count - 1 { next = steps[currentStepIndex + 1] }
@@ -630,8 +661,8 @@ public struct NavGuidance: Sendable {
 
     // MARK: - Display data
 
-    /// `checkForAngleTurnProgressData`: this turn's angle and, when the turn after it is close, the
-    /// second arc.
+    /// `checkForAngleTurnProgressData`: this turn's angle and, when the turn after it is close (within
+    /// `TurnTiming.chainDistance` of it: the two are chained), the second arc.
     mutating func angleTurnProgressData(_ loc: NavLocation) {
         let idx = currentStepIndex
         let cur = steps[idx], next = steps[idx + 1]
@@ -639,13 +670,14 @@ public struct NavGuidance: Sendable {
         if idx < steps.count - 2 {
             let s = steps[idx + 2]
             nn = s
-            if s.type == NavStepType.destination || s.isRoundabout {
+            let chained = next.firstDistance < timing.chainDistance
+            if s.type == NavStepType.destination || s.isRoundabout || !chained {
                 display.nextTurn.turnProgress = 0
                 display.distanceToNextManeuver = 0
             } else {
                 let total = next.distanceToStepEnd(loc) + cur.distanceToStepEnd(loc)
-                display.nextTurn.turnProgress = Self.stepProgress(total, s.type)
-                display.distanceToNextManeuver = NavMath.trunc(max(total - 25, 0))
+                display.nextTurn.turnProgress = timing.progress(atDistance: total)
+                display.distanceToNextManeuver = NavMath.trunc(max(total - TurnTiming.oledShortfall, 0))
             }
         } else {
             display.nextTurn.turnProgress = 0
@@ -679,7 +711,7 @@ public struct NavGuidance: Sendable {
         }
         let total = a.distance(to: b) + step.entrance.distance(to: a)
         let angle = step.angles.first ?? 0
-        display.nextTurn.turnProgress = Self.stepProgress(total, step.type)
+        display.nextTurn.turnProgress = timing.progress(atDistance: total)
         display.nextTurn.relativeTurnAngle = NavMath.normalized(angle)
         display.nextTurn.relativeToPreviousTurnAngle = NavMath.normalized(angle + display.thisTurn.relativeTurnAngle)
         display.nextTurn.relativeToNorthAngle = step.headingAfter
@@ -687,14 +719,20 @@ public struct NavGuidance: Sendable {
 
     // MARK: - Arrival
 
-    /// `hasArrivedAtDestination`: within ~50.5 m (straight line) of the last point — except early in
-    /// the route (step index ≤ n/2 − 1 and, for 6+ steps, < n − 5), so a loop doesn't end at its start.
-    public func hasArrived(at loc: NavLocation) -> Bool {
+    /// `hasArrivedAtDestination`, on `TurnTiming`'s rule: within `arrivalRadius` (straight line) of
+    /// the last point, having ridden more than `arrivalMinimumShare` of the route (`routeShare`, the
+    /// screen's progress), so a loop doesn't end at its start. Without a share (a caller with no
+    /// odometer) the original's guard stands in: not early in the route (step index ≤ n/2 − 1 and,
+    /// for 6+ steps, < n − 5).
+    public func hasArrived(at loc: NavLocation, routeShare: Double? = nil) -> Bool {
         let n = steps.count
         guard n > 0 else { return false }
-        if currentStepIndex <= n / 2 - 1 && n >= 6 && currentStepIndex < n - 5 { return false }
-        let d = steps[n - 1].entrance.distance(to: loc)
-        return Self.stepProgress(d, NavStepType.destination) > 99
+        if let routeShare {
+            if routeShare <= TurnTiming.arrivalMinimumShare { return false }
+        } else if currentStepIndex <= n / 2 - 1 && n >= 6 && currentStepIndex < n - 5 {
+            return false
+        }
+        return steps[n - 1].entrance.distance(to: loc) <= TurnTiming.arrivalRadius
     }
 
     // MARK: - Helpers
@@ -712,29 +750,33 @@ public struct NavGuidance: Sendable {
         return idx
     }
 
-    /// `getStepProgress`: 100 within 20 m (destination 50 m), 0 beyond 95 m (105 m).
-    static func stepProgress(_ dist: Double, _ type: Int) -> Int {
-        let start = type == NavStepType.destination ? 50.0 : 20.0
-        let end = type == NavStepType.destination ? 105.0 : 95.0
-        let p = NavMath.trunc(max((dist - start) * 100 / (end - start), 0))
-        return NavMath.trunc(max(100 - Double(p), 0))
+    /// `getStepProgress` on `TurnTiming`: the destination's ring from the arrival notice to the
+    /// arrival radius; a turn's arc from the prepare to the order distance, and never less than it
+    /// has already shown for this step (`heldProgress`).
+    mutating func turnProgress(_ dist: Double, _ type: Int) -> Int {
+        if type == NavStepType.destination { return TurnTiming.arrivalProgress(atDistance: dist) }
+        let p = max(heldProgress, timing.progress(atDistance: dist))
+        heldProgress = p
+        return p
     }
 
-    /// `getStepProgressWithDistance`.
-    static func stepProgressWithDistance(_ d: Double) -> Int {
-        NavMath.trunc(max(100 - max((d - 20) * 100 / 75, 0), 0))
+    /// `getStepProgressWithDistance`: the arc onto the route, empty where it appears
+    /// (`rejoinArcDistance`), full at the order distance.
+    func rejoinProgress(_ d: Double) -> Int {
+        TurnTiming.progress(d, from: Self.rejoinArcDistance, to: timing.orderDistance)
     }
 
     /// `getReturnToPathProgress` (relative to the previous off-path distance).
     static func returnToPathProgress(_ a: NavLocation, _ b: NavLocation, _ total: Float) -> Int {
         let d = Float(a.distance(to: b))
-        return NavMath.clampTrunc((total - d + 95) / total * 100, 0, 100)
+        return NavMath.clampTrunc((total - d + Float(rejoinArcDistance)) / total * 100, 0, 100)
     }
 
-    /// `checkForQuickTurnDisplayed`.
-    static func quickTurnDisplayed(_ step: NavStep, _ after: NavStep) -> Bool {
+    /// `checkForQuickTurnDisplayed`: the turn after `step` is within `TurnTiming.chainDistance` of
+    /// it, so its arc is already on the ring and stays.
+    func quickTurnDisplayed(_ step: NavStep, _ after: NavStep) -> Bool {
         let fd = step.firstDistance
-        if fd < 0 || step.isRoundabout || after.isRoundabout || !(fd < 95) { return false }
+        if fd < 0 || step.isRoundabout || after.isRoundabout || !(fd < timing.chainDistance) { return false }
         return after.type != NavStepType.destination
     }
 

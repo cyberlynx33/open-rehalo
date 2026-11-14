@@ -130,10 +130,11 @@ final class RouteMatcherTests: XCTestCase {
         }
     }
 
-    /// The rider takes a parallel street for 300 m.
-    func parallel(offset: Double, seed: UInt64) -> (offAt: Double?, off: Bool) {
-        let route = RideSim.route([(0, 0), (0, 1200)])
-        let rider = RideSim.route([(0, 0), (0, 300), (offset, 330), (offset, 630), (0, 660), (0, 1200)])
+    /// The rider takes a parallel street for 300 m, getting there over `approach` metres of route.
+    func parallel(offset: Double, approach: Double = 30, seed: UInt64) -> (offAt: Double?, off: Bool) {
+        let route = RideSim.route([(0, 0), (0, 2000)])
+        let rider = RideSim.route([(0, 0), (0, 300), (offset, 300 + approach), (offset, 600 + approach),
+                                   (0, 600 + 2 * approach), (0, 1000 + 2 * approach)])
         var sim = RideSim(seed: seed, sigma: 5)
         var m = RouteMatcher(route: route)
         var offAt: Double?
@@ -144,19 +145,28 @@ final class RouteMatcherTests: XCTestCase {
         return (offAt, offAt != nil)
     }
 
-    /// The leave threshold is max(30 m, 2 × accuracy): a street 15 m away never leaves the route; at
-    /// 20–25 m with σ = 5 m noise, an occasional exit is the price of noticing a 40 m one in seconds.
+    /// Leaving the route takes `leaveDistance` (60 m) over the accuracy for `leaveSeconds`: a street
+    /// 15 m away never leaves the route, nor does one 40 m away ridden the route's way (the ring keeps
+    /// guiding; the matcher's anchor still knows where the rider is).
     func testParallelStreetCloseByStaysOnRoute() {
-        for seed in seeds { XCTAssertFalse(parallel(offset: 15, seed: seed).off, "seed \(seed)") }
-        XCTAssertLessThanOrEqual(seeds.filter { parallel(offset: 20, seed: $0).off }.count, 2)
+        for seed in seeds {
+            XCTAssertFalse(parallel(offset: 15, seed: seed).off, "seed \(seed)")
+            XCTAssertFalse(parallel(offset: 40, seed: seed).off, "seed \(seed)")
+        }
     }
 
-    func testParallelStreetFurtherAwayLeavesTheRouteSoon() {
+    func testParallelStreetFurtherAwayLeavesTheRouteAfterTheWait() {
+        let p = RouteMatcher.Parameters()
         for seed in seeds {
-            let r = parallel(offset: 40, seed: seed)
-            // On the parallel street from ~330 m: off within 12 s (66 m at 5.5 m/s).
+            // A shallow 17° drift over 300 m of route (the heading rule doesn't fire) to a street 90 m
+            // away: the far rule alone. 65 m from the route is 226 m along the 313 m diagonal; the rider
+            // is off the route `leaveSeconds` later (at 5.5 m/s).
+            let r = parallel(offset: 90, approach: 300, seed: seed)
             XCTAssertNotNil(r.offAt, "seed \(seed)")
-            if let at = r.offAt { XCTAssertLessThan(at, 330 + 12 * 5.5, "seed \(seed)") }
+            if let at = r.offAt {
+                XCTAssertGreaterThan(at, 300 + 226 + p.leaveSeconds * 5.5 - 35, "seed \(seed)")
+                XCTAssertLessThan(at, 300 + 313 + (p.leaveSeconds + 6) * 5.5, "seed \(seed)")
+            }
         }
     }
 

@@ -21,6 +21,13 @@ public struct RideFix: Equatable, Sendable, Codable {
     var point: GeoPoint { GeoPoint(lat, lon) }
 }
 
+/// How much the ride can trust the GPS right now (docs/APP_SPEC.md M17): fixes worse than
+/// `RideEngine.maxAccuracy` don't guide; `weak` after `weakGPSAfter` seconds without a good one,
+/// `lost` after `lostGPSAfter`.
+public enum GPSQuality: String, Sendable, Codable {
+    case good, weak, lost
+}
+
 /// What the Navigating screen shows after a fix.
 public struct RideSnapshot: Equatable, Sendable, Codable {
     /// 0…1 along the route.
@@ -35,11 +42,13 @@ public struct RideSnapshot: Equatable, Sendable, Codable {
     public var reachedOrigin = false
     /// Next manoeuvre ahead (`.straight` when it's more than `RideEngine.straightBeyond` away).
     public var nextTurn = TurnKind.straight
-    /// Metres to `nextTurn`, the number the ring shows: 25 m (destination: 50 m) short of the
-    /// manoeuvre itself, as in the official app.
+    /// Metres to `nextTurn`, the number the ring shows: 25 m (destination: 40 m) short of the
+    /// manoeuvre itself, as in the official app (`TurnTiming.oledShortfall`, `arrivalRadius`).
     public var nextTurnDistance = 0.0
     /// A routed destination's text for `nextTurn` (the street); nil for a GPX.
     public var nextTurnText: String?
+    /// The exit to take when `nextTurn` is a roundabout with a known one (1 = the first).
+    public var nextTurnExit: Int?
     public var remainingDistance = 0.0
     /// Climb still ahead (nil when the route has no elevation).
     public var remainingGain: Double?
@@ -60,6 +69,8 @@ public struct RideSnapshot: Equatable, Sendable, Codable {
     public var wrongWay: Bool?
     /// Matched engine: the wrong-way warning can offer to invert the route (a GPX ride, lead-in done).
     public var canInvert: Bool?
+    /// The GPS as of the last fix (absent in older traces).
+    public var gpsQuality: GPSQuality?
 
     public init() {}
 }
@@ -96,13 +107,27 @@ public struct RideEngine: Sendable {
     /// A GPX ride (not a routed destination): the route can be inverted on a wrong-way warning.
     public let invertible: Bool
     let joinNearest: Bool
+    /// A routed destination's own steps as they came, for a reroute to keep what's left of them.
+    public let routedSteps: [RoutedStep]
 
     /// Further than this from the expected stretch, look for the rider on the whole route.
     static let rematchBeyond = 30.0   // metres
     public static let straightBeyond = 1000.0
+    /// A fix with a worse horizontal accuracy than this (metres) doesn't guide: it only counts the
+    /// time since the last one that did.
+    public static let maxAccuracy = 40.0
+    /// This long (seconds) without a good fix, the GPS is `weak`…
+    public static let weakGPSAfter = 30.0
+    /// …and this long, `lost`.
+    public static let lostGPSAfter = 60.0
+    /// A fix further than this (metres) from the last one doesn't count as distance ridden.
+    static let jumpBeyond = 300.0
 
     var matchedAlong = 0.0
     var lastFix: RideFix?
+    /// The time of the last good fix, and of the first fix of any kind, for `gpsQuality(at:)`.
+    var lastGoodFixTime: Double?
+    var firstFixTime: Double?
 
     /// Guide along `route`.
     /// - `instructions`: a routed destination's instructions (street names on the ring).
@@ -120,6 +145,7 @@ public struct RideEngine: Sendable {
         self.leadInLength = leadInLength
         self.engine = engine
         self.joinNearest = joinNearest
+        self.routedSteps = routedSteps
         invertible = routedSteps.isEmpty && (instructions.isEmpty || leadInLength > 0)
         var d = RoutedStep.covers(routedSteps, length: route.length)
             ? NavDirector(routed: routedSteps, title: title, settings: settings)
@@ -146,6 +172,7 @@ public struct RideEngine: Sendable {
         engine = .classic                           // a straight line: nothing to match
         invertible = false
         joinNearest = false
+        routedSteps = []
         compass = CompassDirector(destination: NavLocation(destination.lat, destination.lon), title: title,
                                   settings: settings)
         reset()
@@ -155,6 +182,7 @@ public struct RideEngine: Sendable {
         snapshot.remainingDistance = route.length
         snapshot.remainingGain = route.totalGain
         snapshot.heading = route.heading(at: 0)
+        snapshot.gpsQuality = .good
         updateNextTurn()
     }
 
@@ -192,15 +220,33 @@ public struct RideEngine: Sendable {
 
     /// One GPS fix: the ring's commands (send them as they are) and, in `snapshot`, what the screen
     /// shows. `compassHeading`: the iPhone compass when reliable, for Compass rides. On arrival the
-    /// screen state keeps the previous fix, the ride is over.
+    /// screen state keeps the previous fix, the ride is over. A fix worse than `maxAccuracy` guides
+    /// nothing: only `gpsQuality` moves.
     public mutating func update(_ fix: RideFix, compassHeading: Double? = nil) -> NavDirector.Result {
         guard route.points.count > 1 else { return NavDirector.Result() }
+        firstFixTime = firstFixTime ?? fix.time
+        let good = fix.horizontalAccuracy >= 0 && fix.horizontalAccuracy <= Self.maxAccuracy
+        if good { lastGoodFixTime = fix.time }
+        snapshot.gpsQuality = gpsQuality(at: fix.time)
+        guard good else { return NavDirector.Result() }
         let result = guideRing(fix, compassHeading)
         if !result.arrived { followOnScreen(fix, compassHeading) }
         return result
     }
 
-    /// Feed one fix to the ring guidance — every fix, unfiltered, as the official app does.
+    /// The GPS at `time` (seconds, the fixes' clock): good until `weakGPSAfter` seconds after the last
+    /// good fix (or the first fix, before any good one), then weak, then lost. Good before any fix at
+    /// all: the screen says "Waiting for GPS…" meanwhile.
+    public func gpsQuality(at time: Double) -> GPSQuality {
+        guard let reference = lastGoodFixTime ?? firstFixTime else { return .good }
+        let silence = time - reference
+        if silence >= Self.lostGPSAfter { return .lost }
+        if silence >= Self.weakGPSAfter { return .weak }
+        return .good
+    }
+
+    /// Feed one fix to the ring guidance — every good fix, as the official app does with every fix.
+    /// The fix's speed times the notices; the screen's progress is the arrival rule's share.
     private mutating func guideRing(_ fix: RideFix, _ compassHeading: Double?) -> NavDirector.Result {
         let accuracy = fix.horizontalAccuracy >= 0 ? NavMath.trunc(fix.horizontalAccuracy.rounded()) : 999
         let loc = NavLocation(fix.lat, fix.lon, accuracy: accuracy)
@@ -209,11 +255,15 @@ public struct RideEngine: Sendable {
             let phone = fix.speed < 1.5 ? compassHeading : nil
             return compass?.update(loc, heading: phone) ?? NavDirector.Result()
         }
-        guard var m = matcher else { return director?.update(loc) ?? NavDirector.Result() }
+        let speed = fix.speed >= 0 ? fix.speed : nil
+        guard var m = matcher else {
+            return director?.update(loc, speed: speed, routeShare: snapshot.progress) ?? NavDirector.Result()
+        }
         let r = m.update(fix)
         matcher = m
         let match = navMatch(r)
-        return director?.update(loc, match: match, wrongWay: r.wrongWay == .confirmed) ?? NavDirector.Result()
+        return director?.update(loc, match: match, wrongWay: r.wrongWay == .confirmed, speed: speed,
+                                routeShare: snapshot.progress) ?? NavDirector.Result()
     }
 
     /// What the guidance is told about a fix. On the way to the route's start (not joined yet, not
@@ -258,17 +308,62 @@ public struct RideEngine: Sendable {
         e.director = d
         e.matcher = RouteMatcher(continuing: m, on: reversed, at: along)
         e.matchedAlong = along
-        e.lastFix = lastFix
-        e.snapshot.distanceRidden = snapshot.distanceRidden
-        e.snapshot.speed = snapshot.speed
-        e.snapshot.heading = snapshot.heading
-        e.snapshot.fixCount = snapshot.fixCount
-        e.snapshot.reachedOrigin = true
+        e.carryOn(from: self)
         e.snapshot.progress = reversed.length > 0 ? min(1, along / reversed.length) : 0
         e.snapshot.remainingDistance = max(0, reversed.length - along)
         e.snapshot.remainingGain = reversed.remainingGain(from: along)
         e.updateNextTurn()
         return (e, director.clearRing())
+    }
+
+    // MARK: - Back to the route (reroute)
+
+    /// Where a "back to the route" leg should rejoin: the route this far ahead of where the rider last
+    /// was on it, so the leg doesn't double back to the point just left (docs/APP_SPEC.md M17).
+    public static let rerouteRejoinAhead = 300.0
+
+    /// Metres along the route the rider was last at: the matcher's best candidate, or the screen's.
+    public var alongRoute: Double { matcher?.last.best?.along ?? matchedAlong }
+
+    /// Where a leg back to the route should end: `rerouteRejoinAhead` past `alongRoute`, or the end.
+    public var rerouteRejoinAlong: Double { min(route.length, alongRoute + Self.rerouteRejoinAhead) }
+
+    /// The same ride on `leg` (from the rider to the route at `rejoinAlong`) followed by what is left
+    /// of the route, and what clears the ring first. The leg's typed steps are kept with what is left
+    /// of the route's own when it had them; a GPX's remainder goes back to the turn detector. Nil
+    /// for a compass ride or a rejoin past the end.
+    public func rerouted(onto leg: RouteGeometry, legSteps: [RoutedStep], rejoinAlong: Double)
+        -> (engine: RideEngine, commands: [NavCommand])? {
+        guard compassTarget == nil, let director, leg.points.count >= 2,
+              let remainder = route.suffix(from: rejoinAlong) else { return nil }
+        let spliced = RouteGeometry.chain(leg, before: remainder)
+        var steps: [RoutedStep] = []
+        if !routedSteps.isEmpty, !legSteps.isEmpty,
+           let rest = RoutedStep.suffix(routedSteps, from: rejoinAlong - leadInLength) {
+            steps = legSteps + rest
+        }
+        var e = RideEngine(route: spliced, title: director.title, settings: director.settings,
+                           routedSteps: steps, engine: engine)
+        e.director?.carouselOnNavigation = director.carouselOnNavigation
+        e.carryOn(from: self)
+        e.snapshot.progress = 0
+        e.snapshot.remainingDistance = spliced.length
+        e.snapshot.remainingGain = spliced.totalGain
+        e.updateNextTurn()
+        return (e, director.clearRing())
+    }
+
+    /// The numbers of a ride that carries on in a new engine (an inverted or rerouted route).
+    private mutating func carryOn(from previous: RideEngine) {
+        lastFix = previous.lastFix
+        lastGoodFixTime = previous.lastGoodFixTime
+        firstFixTime = previous.firstFixTime
+        snapshot.distanceRidden = previous.snapshot.distanceRidden
+        snapshot.speed = previous.snapshot.speed
+        snapshot.heading = previous.snapshot.heading
+        snapshot.fixCount = previous.snapshot.fixCount
+        snapshot.gpsQuality = previous.snapshot.gpsQuality
+        snapshot.reachedOrigin = true
     }
 
     /// Where each manoeuvre of `steps` is along `route` (docs/MAP_MATCHING_SPEC.md §6.1): exact for
@@ -300,24 +395,21 @@ public struct RideEngine: Sendable {
     /// The screen's numbers: what the ring guidance decided, plus progress, distance and speed.
     private mutating func followOnScreen(_ fix: RideFix, _ compassHeading: Double?) {
         let here = fix.point
-        let goodFix = fix.horizontalAccuracy >= 0 && fix.horizontalAccuracy <= 50
 
-        // Distance ridden + speed.
-        if goodFix {
-            if let prev = lastFix {
-                let d = here.distance(to: prev.point)
-                let dt = fix.time - prev.time
-                if d < 300 { snapshot.distanceRidden += d }      // ignore GPS jumps
-                if fix.speed >= 0 {
-                    snapshot.speed = fix.speed
-                } else if dt > 0 {
-                    snapshot.speed = d / dt
-                }
-            } else if fix.speed >= 0 {
+        // Distance ridden + speed (every fix here is a good one: `update` gated it).
+        if let prev = lastFix {
+            let d = here.distance(to: prev.point)
+            let dt = fix.time - prev.time
+            if d < Self.jumpBeyond { snapshot.distanceRidden += d }      // ignore GPS jumps
+            if fix.speed >= 0 {
                 snapshot.speed = fix.speed
+            } else if dt > 0 {
+                snapshot.speed = d / dt
             }
-            lastFix = fix
+        } else if fix.speed >= 0 {
+            snapshot.speed = fix.speed
         }
+        lastFix = fix
 
         if let target = compassTarget {
             followCompass(fix, to: target, compassHeading)
@@ -398,10 +490,13 @@ public struct RideEngine: Sendable {
         updateNextTurn()
     }
 
+    /// The next manoeuvre for the banner: the service's type when the step has one (a roundabout
+    /// with its exit), else the arc's angle.
     private mutating func updateNextTurn() {
         guard let d = director, d.steps.count >= 2 else {
             snapshot.nextTurn = .straight
             snapshot.nextTurnDistance = snapshot.remainingDistance
+            snapshot.nextTurnExit = nil
             return
         }
         let index = min((d.guidance?.currentStepIndex ?? 0) + 1, d.steps.count - 1)
@@ -409,10 +504,15 @@ public struct RideEngine: Sendable {
         let distance = d.guidance.map { Double($0.display.distanceToThisManeuver) } ?? d.steps[0].firstDistance
         snapshot.nextTurnDistance = distance
         snapshot.nextTurnText = d.turnTexts[index]
+        snapshot.nextTurnExit = next.maneuver?.roundabout?.exit
         if next.type == NavStepType.destination {
             snapshot.nextTurn = .arrival
         } else if distance > Self.straightBeyond {
             snapshot.nextTurn = .straight
+        } else if next.isRoundabout {
+            snapshot.nextTurn = .roundabout
+        } else if let maneuver = next.maneuver, let kind = TurnKind(maneuver: maneuver) {
+            snapshot.nextTurn = kind
         } else {
             let angle = Double(next.angles.first ?? 0)
             snapshot.nextTurn = TurnKind(turn: angle) ?? (d.routed ? .gentle(angle) : angle > 0 ? .right : .left)

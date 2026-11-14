@@ -32,8 +32,11 @@ public struct NavStep: Equatable, Sendable {
     /// turn detector found it (the matched engine reads where the manoeuvre is along the route from it;
     /// `startIndex` can't, as it counts decimated points). Nil for routed steps.
     public var routeIndex: Int? = nil
+    /// Addition: the manoeuvre as the routing service typed it (BRouter); nil from the GPX detector
+    /// and from Apple's steps, which only have text.
+    public var maneuver: RoutedManeuver? = nil
 
-    var isRoundabout: Bool { type & 0x10 != 0 }
+    public var isRoundabout: Bool { type & 0x10 != 0 }
 
     /// `getInstruction()`: strips one trailing '.'.
     var instructionText: String { instruction.hasSuffix(".") ? String(instruction.dropLast()) : instruction }
