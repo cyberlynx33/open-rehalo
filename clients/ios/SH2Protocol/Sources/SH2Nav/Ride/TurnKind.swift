@@ -24,4 +24,21 @@ public enum TurnKind: String, CaseIterable, Equatable, Sendable, Codable {
         guard abs(delta) >= Double(NavStepFactory.routedTurnMinimum) else { return .straight }
         return delta > 0 ? .slightRight : .slightLeft
     }
+
+    /// The arrow of a manoeuvre typed by the routing service (BRouter); nil for the ones that have
+    /// none of their own (depart, arrive).
+    public init?(maneuver: RoutedManeuver) {
+        switch maneuver {
+        case .straight: self = .straight
+        case .slightLeft, .keepLeft: self = .slightLeft
+        case .left: self = .left
+        case .sharpLeft: self = .sharpLeft
+        case .slightRight, .keepRight: self = .slightRight
+        case .right: self = .right
+        case .sharpRight: self = .sharpRight
+        case .uTurn: self = .uTurn
+        case .roundabout: self = .roundabout
+        case .depart, .arrive: return nil
+        }
+    }
 }

@@ -10,10 +10,12 @@ import UIKit
 /// (guidance then stays on the phone) and in demo mode (simulated rider).
 ///
 /// Destinations: the search pill finds routes and places (`SearchSheet`), and touching and holding
-/// the map drops a pin. A destination gets Apple's routes in the rider's `RouteProfile`
-/// (`DestinationRouter`), ▶ NAVEGAR turn by turn or Compass as the crow flies. Navigating a route
-/// from more than `farFromStart` away asks
-/// how to get to its start.
+/// the map drops a pin. A destination gets routes in the rider's `RouteProfile` from BRouter or Apple
+/// (`RoutingService`), ▶ NAVEGAR turn by turn or Compass as the crow flies. Navigating a route
+/// from more than `farFromStart` away asks how to get to its start.
+///
+/// Two map engines (docs/APP_SPEC.md M17): MapKit's `Map`, or `HaloMapView` on MapLibre with its own
+/// layers sheet and attribution, picked in Settings › Advanced. The chrome is the same on both.
 struct MapTab: View {
     @EnvironmentObject private var guidance: GuidanceController
     @EnvironmentObject private var selection: RouteSelection
@@ -41,6 +43,15 @@ struct MapTab: View {
     @State private var orientation: MapOrientation = .north
     /// The map's heading while Free (for the button's north arrow).
     @State private var freeHeading: Double = 0
+
+    // The MapLibre engine (docs/APP_SPEC.md M17): its layers, camera moves and live camera.
+    @AppStorage(MapLayerSelection.storageKey) private var layers = MapLayerSelection()
+    @State private var mapMove: HaloMapMove?
+    @State private var liveMap = LiveMapCamera()
+    @State private var showLayers = false
+    /// MapLibre's user tracking is on (the counterpart of `camera.followsUserLocation`).
+    @State private var libreFollowing = false
+    @ObservedObject private var offline = OfflineMapStore.shared
 
     // Destinations (search / long-press pin).
     @StateObject private var search = PlaceSearch()
@@ -80,6 +91,7 @@ struct MapTab: View {
     static let farFromStart: CLLocationDistance = 500
 
     private var fmt: UnitFormat { settings.unitFormat }
+    private var usesMapLibre: Bool { settings.mapEngine == .mapLibre }
     private var routed: RoutedDestination? {
         routeOptions.indices.contains(routeChoice) ? routeOptions[routeChoice] : nil
     }
@@ -127,6 +139,24 @@ struct MapTab: View {
             if showHideHint && chromeHidden {
                 HideControlsHint().padding(.bottom, Theme.Space.xl)
             }
+        }
+        .overlay(alignment: .bottomLeading) {
+            // Who the map data comes from, always on the MapLibre map (its own (i) has the rest).
+            if usesMapLibre && !chromeHidden {
+                MapAttributionBar(layers: layers)
+                    .padding(.leading, Theme.Space.l)
+                    .padding(.bottom, 2)
+            }
+        }
+        .sheet(isPresented: $showLayers) {
+            MapLayersSheet(layers: $layers) {
+                router.tab = .halo
+                router.haloPath = [.settings, .advanced, .offlineMaps]
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(Theme.surface2)
+            .haloTheme()
         }
         .toolbar(chromeHidden ? .hidden : .automatic, for: .tabBar)
         .sheet(isPresented: $showSearch, onDismiss: startRouteFromSearch) {
@@ -180,10 +210,18 @@ struct MapTab: View {
                 appeared = true
                 orientation = settings.mapOrientation
                 if orientation == .compass && guidance.locationAuthorized {
-                    camera = .userLocation(followsHeading: true, fallback: userFallback)
+                    if usesMapLibre {
+                        mapMove = HaloMapMove(.follow(heading: true), animated: false)
+                    } else {
+                        camera = .userLocation(followsHeading: true, fallback: userFallback)
+                    }
                 } else {
                     if orientation == .compass { orientation = .north }    // no location: can't follow
-                    frameSelection(animated: false)
+                    if usesMapLibre, shownRoute == nil, guidance.locationAuthorized {
+                        mapMove = HaloMapMove(.follow(heading: false), animated: false)    // open on the rider
+                    } else {
+                        frameSelection(animated: false)
+                    }
                 }
             }
             consumePendingNavigation()
@@ -218,16 +256,60 @@ struct MapTab: View {
 
     /// `.pitch` must stay in the interaction modes: without it MapKit ignores the camera's pitch
     /// and draws flat. Steep tilts come from `steepTilt`, which takes over MapKit's own gesture.
-    private var map: some View {
+    @ViewBuilder private var map: some View {
         // Touch and hold drops a pin; a tap shows or hides the controls; the map keeps its own
         // gestures (a pan cancels the hold).
-        MapReader { proxy in
-            baseMap
-                .simultaneousGesture(dropPinGesture(proxy))
-                .simultaneousGesture(TapGesture().onEnded { mapTapped() })
+        Group {
+            if usesMapLibre {
+                libreMap
+            } else {
+                MapReader { proxy in
+                    baseMap
+                        .simultaneousGesture(dropPinGesture(proxy))
+                        .simultaneousGesture(TapGesture().onEnded { mapTapped() })
+                }
+            }
         }
         .accessibilityAction(named: Text(chromeHidden ? "Show the controls" : "Hide the controls")) {
             setChromeHidden(!chromeHidden)
+        }
+    }
+
+    /// The MapLibre map: the same content, its own taps and holds, the camera moved by `mapMove`.
+    private var libreMap: some View {
+        HaloMapView(layers: layers,
+                    content: HaloMapContent(route: shownRoute, alternatives: otherOptions.map { routeOptions[$0].route },
+                                            destination: destination, showsUserLocation: !guidance.locationDenied,
+                                            downloadedOutlines: layers.overlays.contains(.downloaded) ? offline.outlines : []),
+                    move: mapMove,
+                    insets: UIEdgeInsets(top: mapInsets.top, left: 0, bottom: mapInsets.bottom, right: 0),
+                    live: liveMap, onEvent: handleMapEvent)
+    }
+
+    private func handleMapEvent(_ event: HaloMapEvent) {
+        switch event {
+        case .tap:
+            mapTapped()
+        case .longPress(let coordinate):
+            dropPin(at: coordinate)
+        case .cameraSettled(let cam, let byUser):
+            let tilted = cam.pitch > 1
+            if tilted != is3D { is3D = tilted }
+            if orientation == .free { freeHeading = cam.heading }
+            // Turning the map by hand in North sets it Free, as on MapKit.
+            if byUser, orientation == .north, abs(Geo.angleDelta(from: 0, to: cam.heading)) > 3 {
+                freeHeading = cam.heading
+                orientation = .free
+            }
+        case .trackingChanged(let following, _):
+            libreFollowing = following
+            // A gesture that ends heading-follow leaves Compass for Free, with the map where it is.
+            if !following, orientation == .compass {
+                freeHeading = liveMap.camera?.heading ?? 0
+                orientation = .free
+            }
+        case .gestureBegan, .styleLoaded:
+            break
         }
     }
 
@@ -401,8 +483,14 @@ struct MapTab: View {
     private var mapButtons: some View {
         VStack(spacing: Theme.Space.s) {
             // Thumb column, least to most used from the top: view controls, then route / me.
-            MapViewMenu(base: $base, is3D: is3D, isCompass: orientation == .compass,
-                        toggle3D: toggle3D, toggleCompass: toggleCompass)
+            if usesMapLibre {
+                MapRoundButton(systemImage: "square.2.layers.3d", label: "Map layers") { showLayers = true }
+                MapRoundButton(systemImage: is3D ? "view.2d" : "view.3d",
+                               label: is3D ? "Back to 2D" : "View in 3D", isOn: is3D, action: toggle3D)
+            } else {
+                MapViewMenu(base: $base, is3D: is3D, isCompass: orientation == .compass,
+                            toggle3D: toggle3D, toggleCompass: toggleCompass)
+            }
             if orientation != .north {
                 OrientationButton(orientation: orientation, mapHeading: freeHeading,
                                   action: toggleOrientation)
@@ -451,7 +539,7 @@ struct MapTab: View {
     }
 
     private func stats(_ r: RoutedDestination) -> String {
-        optionStats(r) + " · " + r.travel.label
+        optionStats(r) + " · " + r.travel.label + " · " + r.provider.label
     }
 
     private func optionStats(_ r: RoutedDestination) -> String {
@@ -545,20 +633,23 @@ struct MapTab: View {
         go(route)
     }
 
+    /// A saved destination rides on its typed steps again (`RouteSelection.routedSteps`).
     private func go(_ route: GPXRoute, leadIn: RoutedDestination? = nil, joinNearest: Bool = false) {
-        guidance.start(route, leadIn: leadIn, joinNearest: joinNearest)
+        guidance.start(route, routedSteps: selection.routedSteps, leadIn: leadIn, joinNearest: joinNearest)
         showNav = true
     }
 
-    /// "Lead me to the start": Apple's route to the start, ridden first as part of the same ride.
+    /// "Lead me to the start": a route to the start (BRouter or Apple), ridden first as part of the
+    /// same ride.
     private func leadToStart(_ route: GPXRoute) {
         guard let start = route.points.first else { return }
         leadingIn = true
         Task {
             defer { leadingIn = false }
             do {
-                let leadIn = try await DestinationRouter.route(to: Destination(coordinate: start, name: route.name),
-                                                               profile: settings.routeProfile)
+                let leadIn = try await RoutingService.shared.route(to: Destination(coordinate: start, name: route.name),
+                                                                   from: currentCoordinate,
+                                                                   profile: settings.routeProfile, id: UUID())
                 go(route, leadIn: leadIn)
             } catch {
                 importError = String(localized: "Couldn't find a route to the start: \(error.localizedDescription)")
@@ -580,10 +671,14 @@ struct MapTab: View {
     private func openSearch() {
         firstRunHintShown = true
         search.query = ""
-        if let cam = live.camera {
-            search.setRegion(MKCoordinateRegion(center: cam.centerCoordinate,
-                                                latitudinalMeters: max(cam.distance * 2, 5_000),
-                                                longitudinalMeters: max(cam.distance * 2, 5_000)))
+        // The search is biased to what the map shows, on either engine.
+        let view: (center: CLLocationCoordinate2D, distance: Double)? = usesMapLibre
+            ? liveMap.camera.map { ($0.center, $0.distance) }
+            : live.camera.map { ($0.centerCoordinate, $0.distance) }
+        if let view {
+            search.setRegion(MKCoordinateRegion(center: view.center,
+                                                latitudinalMeters: max(view.distance * 2, 5_000),
+                                                longitudinalMeters: max(view.distance * 2, 5_000)))
         }
         showSearch = true
     }
@@ -603,14 +698,22 @@ struct MapTab: View {
         }
     }
 
+    /// Camera height that shows about 1.5 km round a destination.
+    static let destinationDistance: CLLocationDistance = 3_000
+
     private func setDestination(_ d: Destination, center: Bool) {
         destination = d
         clearRoutes()
         if center {
-            let region = MKCoordinateRegion(center: d.coordinate, latitudinalMeters: 1_500, longitudinalMeters: 1_500)
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.5)) { camera = .region(region) }
+            if usesMapLibre {
+                mapMove = HaloMapMove(.camera(HaloMapCamera(center: d.coordinate, distance: Self.destinationDistance)),
+                                      animated: !reduceMotion)
+            } else {
+                let region = MKCoordinateRegion(center: d.coordinate, latitudinalMeters: 1_500, longitudinalMeters: 1_500)
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.5)) { camera = .region(region) }
+            }
         }
-        // Apple routes from the current location.
+        // Routes from the current location.
         guard !guidance.locationDenied else {
             routeError = String(localized: "Turn on Location to get a route.")
             return
@@ -619,14 +722,14 @@ struct MapTab: View {
         loadRoutes(to: d)
     }
 
-    /// Apple's routes to `d` in the rider's profile. An answer for another destination or profile is
-    /// dropped.
+    /// Routes to `d` in the rider's profile, from BRouter when set up, else Apple (`RoutingService`).
+    /// An answer for another destination or profile is dropped.
     private func loadRoutes(to d: Destination) {
         let profile = settings.routeProfile
         routing = true
         Task {
             do {
-                let options = try await DestinationRouter.routes(to: d, profile: profile, id: d.id)
+                let options = try await RoutingService.shared.routes(to: d, from: currentCoordinate, profile: profile, id: d.id)
                 guard destination?.id == d.id, settings.routeProfile == profile else { return }
                 routeOptions = options
                 routing = false
@@ -702,12 +805,16 @@ struct MapTab: View {
         showNav = true
     }
 
+    /// Save: the GPX with its elevation, and the typed steps next to it, so the saved route rides as
+    /// the fresh one did (docs/APP_SPEC.md M17).
     private func saveDestination() {
         guard let d = destination, let r = routed else { return }
         Task {
             do {
-                try await library.importGPX(data: GPXWriter.data(name: d.name, points: r.route.points),
-                                            fallbackName: d.name, source: .appleMaps)
+                let gpx = GPXWriter.data(name: d.name, points: r.route.points, elevations: r.route.elevations,
+                                         creator: "rehalo (\(r.provider.label) route)")
+                try await library.importGPX(data: gpx, fallbackName: d.name, source: r.provider.routeSource,
+                                            steps: r.steps)
                 if destination?.id == d.id { destinationSaved = true }
             } catch {
                 routeError = String(localized: "Couldn't save the route: \(error.localizedDescription)")
@@ -724,6 +831,10 @@ struct MapTab: View {
 
     private func frameSelection(animated: Bool) {
         guard let route = shownRoute, !route.points.isEmpty else { return }
+        if usesMapLibre {
+            mapMove = HaloMapMove(.frame(route.points), animated: animated && !reduceMotion)
+            return
+        }
         // In 3D keep looking at the route from an angle instead of dropping to a flat frame.
         let target: MapCameraPosition = is3D ? .camera(.overview(of: route))
                                              : .rect(route.boundingMapRect())
@@ -734,9 +845,19 @@ struct MapTab: View {
         }
     }
 
+    /// MapLibre's pitch limit (its camera caps at 60°; no steep tilt there).
+    static let librePitch3D = 60.0
+
     /// 3D tilts the camera for real (and lowers it if MapKit would cap the tilt); 2D goes back to
     /// a flat, north-up map over the same spot.
     private func toggle3D() {
+        if usesMapLibre {
+            guard let cam = liveMap.camera else { return }
+            let next = HaloMapCamera(center: cam.center, distance: cam.distance,
+                                     heading: is3D ? 0 : cam.heading, pitch: is3D ? 0 : Self.librePitch3D)
+            mapMove = HaloMapMove(.camera(next), animated: !reduceMotion)
+            return
+        }
         guard let cam = live.camera else { return }
         let next = !is3D ? MapTilt.tilted(cam, pitch: MapTilt.pitch3D)
                         : MapCamera(centerCoordinate: cam.centerCoordinate, distance: cam.distance,
@@ -779,7 +900,7 @@ struct MapTab: View {
         case .north:
             startCompass()
         case .compass:
-            let following = camera.followsUserLocation
+            let following = usesMapLibre ? libreFollowing : camera.followsUserLocation
             orientation = .north
             settings.mapOrientation = .north
             turnNorth(thenFollow: following)
@@ -804,6 +925,10 @@ struct MapTab: View {
         if !guidance.locationAuthorized { guidance.requestLocationPermission() }
         orientation = .compass
         settings.mapOrientation = .compass
+        if usesMapLibre {
+            mapMove = HaloMapMove(.follow(heading: true), animated: !reduceMotion)
+            return
+        }
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.5)) {
             camera = .userLocation(followsHeading: true, fallback: userFallback)
         }
@@ -812,6 +937,10 @@ struct MapTab: View {
     /// Turn the map north up where it is; `thenFollow` then hands the camera to the user's location
     /// (plain location-follow keeps whatever heading it starts from, hence the two steps).
     private func turnNorth(thenFollow: Bool) {
+        if usesMapLibre {
+            mapMove = HaloMapMove(thenFollow ? .follow(heading: false) : .north, animated: !reduceMotion)
+            return
+        }
         let animation: Animation? = reduceMotion ? nil : .easeInOut(duration: 0.5)
         let follow = { withAnimation(animation) { camera = .userLocation(fallback: userFallback) } }
         guard let cam = live.camera, abs(Geo.angleDelta(from: 0, to: cam.heading)) > 0.5 else {

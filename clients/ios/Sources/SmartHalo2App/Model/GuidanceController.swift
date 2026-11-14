@@ -22,9 +22,11 @@ import SH2Protocol
 /// ring agree; only progress, distance left and speed are its own. No phone-side off-route sound
 /// (UX §10).
 ///
-/// Also (additions): a destination routed by Apple (`start(_:instructions:)`, street names on
-/// the ring), a lead-in to a route's start chained before it (`leadIn:`), joining a route at its
-/// nearest point (`joinNearest:`), and the official "as the crow flies" mode (`startCompass`).
+/// Also (additions): a destination routed by Apple or BRouter (`start(_:instructions:routedSteps:)`,
+/// street names and typed manoeuvres on the ring), a lead-in to a route's start chained before it
+/// (`leadIn:`), joining a route at its nearest point (`joinNearest:`), the official "as the crow
+/// flies" mode (`startCompass`), the GPS quality and, with BRouter set up, a leg back to the route
+/// when off it (`considerReroute`, docs/APP_SPEC.md M17).
 @MainActor
 final class GuidanceController: ObservableObject {
     static let shared = GuidanceController(connection: .shared)
@@ -108,9 +110,16 @@ final class GuidanceController: ObservableObject {
     @Published private(set) var canInvert = false
     /// Bumps when the wrong-way haptic should play: at most `maxWrongWayAlerts` in a row, ≥ 30 s apart.
     @Published private(set) var wrongWayAlerts = 0
-    /// Bumps whenever `route` gets new geometry (a new ride, `invert()`): `GPXRoute ==` only compares
-    /// ids, so the map keys its route layers on this too (docs/MAP_MATCHING_SPEC.md §9.3).
+    /// Bumps whenever `route` gets new geometry (a new ride, `invert()`, a reroute): `GPXRoute ==` only
+    /// compares ids, so the map keys its route layers on this too (docs/MAP_MATCHING_SPEC.md §9.3).
     @Published private(set) var routeRevision = 0
+    /// How much the ride trusts the GPS (docs/APP_SPEC.md M17): weak after 30 s without a good fix,
+    /// lost after 60 s. Kept up to date by the clock, so it moves even when no fix comes at all.
+    @Published private(set) var gpsQuality: GPSQuality = .good
+    /// A "back to the route" leg is being asked of BRouter.
+    @Published private(set) var rerouting = false
+    /// The exit to take when `nextTurn` is a roundabout with a known one.
+    @Published private(set) var nextTurnExit: Int?
 
     var locationAuthorized: Bool {
         locationStatus == .authorizedWhenInUse || locationStatus == .authorizedAlways
@@ -150,6 +159,12 @@ final class GuidanceController: ObservableObject {
 
     private var startedAt: Date?
     private var clockTask: Task<Void, Never>?
+
+    // Back to the route (docs/APP_SPEC.md M17): BRouter's leg from the rider to the route ahead.
+    private var rerouteBackoff = RerouteBackoff()
+    private var rerouteTask: Task<Void, Never>?
+    /// The profile the ride was planned with: the leg back uses the same.
+    private var rideProfile: RouteProfile = .city
 
     // Demo: a simulated rider moves along the route on a timer.
     private var demoTask: Task<Void, Never>?
@@ -207,6 +222,7 @@ final class GuidanceController: ObservableObject {
         let engine = RideEngine(route: ride.geometry, title: route.name, settings: ringSettings, instructions: texts,
                                 routedSteps: routedSteps, leadInLength: leadIn?.route.length ?? 0,
                                 joinNearest: joinNearest, engine: AppSettings.shared.navigationEngine)
+        rideProfile = AppSettings.shared.routeProfile
         begin(ride, engine)
         RideRecorder.shared.begin(RideTrace.Header(engine: engine, title: route.name, instructions: texts,
                                                    routedSteps: routedSteps, joinNearest: joinNearest,
@@ -270,6 +286,12 @@ final class GuidanceController: ObservableObject {
         haloWasConnected = connection.state == .connected
         haloLost = false
 
+        rerouteTask?.cancel()
+        rerouteTask = nil
+        rerouting = false
+        rerouteBackoff.reset()
+        gpsQuality = .good
+
         startedAt = Date()
         clockTask?.cancel()
         clockTask = Task { @MainActor [weak self] in
@@ -277,6 +299,12 @@ final class GuidanceController: ObservableObject {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self, self.following, let t0 = self.startedAt else { return }
                 self.elapsed = Date().timeIntervalSince(t0)
+                // The GPS can go quiet altogether: the clock, not a fix, says it's weak or lost.
+                if let e = self.engine, self.hasFix, !self.simulated {
+                    let q = e.gpsQuality(at: Date().timeIntervalSince1970)
+                    if q != self.gpsQuality { self.gpsQuality = q }
+                }
+                self.considerReroute()
             }
         }
 
@@ -364,6 +392,51 @@ final class GuidanceController: ObservableObject {
         headingTracker = nil
         toStart = nil
         carouselSub = nil
+        rerouteTask?.cancel()
+        rerouteTask = nil
+        rerouting = false
+    }
+
+    // MARK: - Back to the route (reroute)
+
+    /// Off the route with BRouter set up: ask it for a leg from the rider back onto the route further
+    /// ahead (`RideEngine.rerouteRejoinAlong`) and carry the ride on along it (docs/APP_SPEC.md M17).
+    /// A failed request waits `RerouteBackoff` (30 s, doubling to 8 min) before the next; back on the
+    /// route on its own, the wait is forgotten. Not in demo mode, nor on a Compass ride.
+    private func considerReroute() {
+        guard following, offRoute, reachedOrigin, !simulated, compassTarget == nil, rerouteTask == nil,
+              RoutingService.shared.hasBRouter, let here = lastLocation, let ride = engine else { return }
+        guard rerouteBackoff.canAttempt(at: Date().timeIntervalSince1970) else { return }
+        let rejoin = ride.rerouteRejoinAlong
+        let target = CLLocationCoordinate2D(ride.route.coordinate(at: rejoin))
+        let profile = rideProfile
+        rerouting = true
+        rerouteTask = Task { @MainActor [weak self] in
+            defer {
+                self?.rerouting = false
+                self?.rerouteTask = nil
+            }
+            do {
+                let leg = try await RoutingService.shared.rerouteLeg(from: here.coordinate, to: target,
+                                                                     profile: profile, id: UUID())
+                guard let self, self.following, self.offRoute, let current = self.engine,
+                      let r = current.rerouted(onto: leg.route.geometry, legSteps: leg.steps, rejoinAlong: rejoin)
+                else { return }
+                self.engine = r.engine
+                if let route = self.route {
+                    self.route = GPXRoute(id: route.id, name: route.name, geometry: r.engine.route)
+                }
+                self.routeRevision += 1
+                self.rerouteBackoff.reset()
+                RideRecorder.shared.record(RideTrace.Entry(fix: nil, engine: r.engine, commands: r.commands,
+                                                           event: "reroute"))
+                self.sendRing(r.commands)
+                self.apply(r.engine.snapshot)
+            } catch {
+                self?.rerouteBackoff.failed(at: Date().timeIntervalSince1970)
+                LogStore.shared.appendFromAnywhere("Reroute: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func connectionChanged(_ s: HaloConnectionState) {
@@ -432,6 +505,9 @@ final class GuidanceController: ObservableObject {
         nextTurn = s.nextTurn
         nextTurnDistance = s.nextTurnDistance
         nextTurnText = s.nextTurnText
+        nextTurnExit = s.nextTurnExit
+        if let q = s.gpsQuality, q != gpsQuality { gpsQuality = q }
+        if !s.offRoute, rerouteBackoff.failures > 0 { rerouteBackoff.reset() }
         remainingDistance = s.remainingDistance
         remainingGain = s.remainingGain
         speed = s.speed

@@ -33,6 +33,10 @@ final class AppSettings: ObservableObject {
         static let rainAlerts = "sh2.rain.alerts"
         static let syncPasswords = "sh2.keychain.syncPasswords"
         static let navigationEngine = "sh2.nav.engine"
+        static let brouterURL = "sh2.routing.brouterURL"
+        static let mapEngine = "sh2.map.engine"
+        static let offlineWiFiOnly = "sh2.offline.wifiOnly"
+        static let offlineSaveWithRoute = "sh2.offline.saveWithRoute"
     }
 
     private let defaults = UserDefaults.standard
@@ -137,6 +141,24 @@ final class AppSettings: ObservableObject {
             KeychainStore.applySync(syncPasswordsToICloud)
         }
     }
+    /// The BRouter server's base URL (docs/APP_SPEC.md M17): BRouter itself or a proxy in front of it.
+    /// Empty by default: routes then come from Apple Maps.
+    @Published var brouterURLString: String {
+        didSet { defaults.set(brouterURLString, forKey: Key.brouterURL) }
+    }
+    /// Which map draws the Map tab, Navigating and the route detail: Apple Maps (default until the
+    /// MapLibre one has been tried on a phone) or MapLibre (Settings › Advanced).
+    @Published var mapEngine: MapEngine {
+        didSet { defaults.set(mapEngine.rawValue, forKey: Key.mapEngine) }
+    }
+    /// Offline map downloads only over Wi-Fi (default on).
+    @Published var offlineWiFiOnly: Bool {
+        didSet { defaults.set(offlineWiFiOnly, forKey: Key.offlineWiFiOnly) }
+    }
+    /// Download the map of a route's corridor when it is saved (default on, MapLibre only).
+    @Published var offlineSaveWithRoute: Bool {
+        didSet { defaults.set(offlineSaveWithRoute, forKey: Key.offlineSaveWithRoute) }
+    }
 
     private init() {
         hasCompletedOnboarding = defaults.bool(forKey: Key.onboarded)
@@ -153,7 +175,7 @@ final class AppSettings: ObservableObject {
             ?? .north
         navPrimaryMetric = defaults.string(forKey: Key.navPrimaryMetric)
             .flatMap(NavPrimaryMetric.init(rawValue:)) ?? .speed
-        routeProfile = defaults.string(forKey: Key.routeProfile).flatMap(RouteProfile.init(rawValue:)) ?? .city
+        routeProfile = defaults.string(forKey: Key.routeProfile).flatMap(RouteProfile.init(stored:)) ?? .city
         alarmOn = defaults.bool(forKey: Key.alarmOn)
         alarmVigilant = defaults.object(forKey: Key.alarmVigilant) as? Bool ?? true
         alarmTapCode = defaults.string(forKey: Key.alarmTapCode).flatMap(TapCode.init)
@@ -169,6 +191,10 @@ final class AppSettings: ObservableObject {
         navigationEngine = defaults.string(forKey: Key.navigationEngine).flatMap(RideEngine.Engine.init(rawValue:))
             ?? .matched
         syncPasswordsToICloud = defaults.object(forKey: Key.syncPasswords) as? Bool ?? true
+        brouterURLString = defaults.string(forKey: Key.brouterURL) ?? ""
+        mapEngine = defaults.string(forKey: Key.mapEngine).flatMap(MapEngine.init(rawValue:)) ?? .appleMaps
+        offlineWiFiOnly = defaults.object(forKey: Key.offlineWiFiOnly) as? Bool ?? true
+        offlineSaveWithRoute = defaults.object(forKey: Key.offlineSaveWithRoute) as? Bool ?? true
         // didSet doesn't run in init: bring already-stored passwords in line (one-time migration).
         KeychainStore.applySync(syncPasswordsToICloud)
     }
@@ -178,6 +204,10 @@ final class AppSettings: ObservableObject {
 
     /// Normalised base URL, if the stored string parses to an http(s) URL.
     var serverURL: URL? { AppSettings.normalize(serverURLString) }
+
+    /// The BRouter base URL, normalised like the server's (`http://` on the local network, `https://`
+    /// elsewhere, no trailing slash); nil when not set or not an http(s) URL.
+    var brouterURL: URL? { AppSettings.normalize(brouterURLString) }
 
     func completeOnboarding(useServer: Bool) {
         self.useServer = useServer
@@ -223,6 +253,24 @@ final class AppSettings: ObservableObject {
 
     /// The server is reached over plain HTTP: credentials and tokens travel in clear.
     var serverIsPlainHTTP: Bool { serverURL?.scheme == "http" }
+}
+
+/// The map behind the Map tab, Navigating and the route detail (docs/APP_SPEC.md M17). The 3D route
+/// view stays on Apple Maps either way (MapLibre Native has no 3D terrain).
+enum MapEngine: String, CaseIterable, Identifiable {
+    /// SwiftUI `Map` (MapKit): Apple's tiles, online only.
+    case appleMaps
+    /// MapLibre Native over OpenFreeMap, with the IGN, Mapterhorn and CyclOSM layers and offline areas.
+    case mapLibre
+
+    var id: String { rawValue }
+
+    var label: LocalizedStringResource {
+        switch self {
+        case .appleMaps: return "Apple Maps"
+        case .mapLibre: return "MapLibre (beta)"
+        }
+    }
 }
 
 /// What the first (tappable) metric of the Navigating panel shows.

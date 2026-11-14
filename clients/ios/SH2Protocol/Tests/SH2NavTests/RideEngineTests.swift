@@ -119,13 +119,18 @@ final class RideEngineTests: XCTestCase {
         XCTAssertEqual(e.snapshot.distanceRidden, 0)
     }
 
-    func testBadFixesDoNotCountAsDistanceButStillReachTheScreen() {
+    /// A fix worse than `RideEngine.maxAccuracy` guides nothing, on the ring or the screen: it only
+    /// counts the time since the last good one.
+    func testBadFixesCountForNothingButTheGPSQuality() {
         let route = lRoute()
         var e = engine(route)
         _ = e.update(fix(point(north: 0, east: 0), t: 0))
-        _ = e.update(fix(point(north: 100, east: 0), t: 1, accuracy: 80))
+        let r = e.update(fix(point(north: 100, east: 0), t: 1, accuracy: 80))
+        XCTAssertTrue(r.commands.isEmpty)
         XCTAssertEqual(e.snapshot.distanceRidden, 0)
-        XCTAssertEqual(e.snapshot.progress, 100 / route.length, accuracy: 0.01)
+        XCTAssertEqual(e.snapshot.progress, 0)
+        XCTAssertEqual(e.snapshot.gpsQuality, .good)
+        XCTAssertEqual(e.snapshot.fixCount, 1)
     }
 
     func testSpeedFallsBackToDistanceOverTime() {

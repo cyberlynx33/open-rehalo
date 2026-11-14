@@ -52,6 +52,8 @@ private struct ObservedAdvancedList: View {
             toolsSection
             demoSection
             navigationSection
+            mapSection
+            routingSection
             recordingSection
             passwordSection
 
@@ -177,6 +179,44 @@ private struct ObservedAdvancedList: View {
             Text("Navigation")
         } footer: {
             Text("Locates you on the route the way the official SmartHalo app does: the current stretch only, and no wrong-way warning. From the next ride.")
+        }
+        .listRowBackground(Theme.surface)
+    }
+
+    /// The map engine (docs/APP_SPEC.md M17): Apple Maps until MapLibre has been tried on a phone.
+    private var mapSection: some View {
+        Section {
+            Picker(selection: $settings.mapEngine) {
+                ForEach(MapEngine.allCases) { engine in
+                    Text(engine.label).tag(engine)
+                }
+            } label: {
+                Label("Map engine", systemImage: "map")
+            }
+            NavigationLink(value: HaloRoute.offlineMaps) {
+                Label("Offline maps", systemImage: "arrow.down.circle")
+            }
+        } header: {
+            Text("Map")
+        } footer: {
+            Text("MapLibre draws OpenStreetMap data from OpenFreeMap, with Spain's IGN topo and satellite layers, shaded relief and CyclOSM's cycle network, and can save areas for offline use. The 3D route view stays on Apple Maps.")
+        }
+        .listRowBackground(Theme.surface)
+    }
+
+    /// Where bike routes come from: a BRouter server of the rider's, or Apple Maps.
+    private var routingSection: some View {
+        Section {
+            TextField("BRouter URL", text: $settings.brouterURLString, prompt: Text(verbatim: "https://brouter.example.org"))
+                .keyboardType(.URL)
+                .textContentType(.URL)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .font(.system(.body, design: .monospaced))
+        } header: {
+            Text("BRouter server")
+        } footer: {
+            Text("The base URL of a BRouter server (or a proxy to one, such as your sh2-server's). Routes then use its City, Road, Gravel and MTB profiles with elevation and roundabouts, and a way back is asked for when you leave the route. Empty: routes come from Apple Maps.")
         }
         .listRowBackground(Theme.surface)
     }

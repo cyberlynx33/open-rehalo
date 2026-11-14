@@ -20,6 +20,8 @@ struct RouteDetailView: View {
     @State private var showDelete = false
     @State private var loadError = false
     @State private var show3D = false
+    /// The MapLibre map's layers (Settings › Advanced › Map engine), shared with the Map tab.
+    @AppStorage(MapLayerSelection.storageKey) private var layers = MapLayerSelection()
 
     init(routeID: UUID) {
         self.routeID = routeID
@@ -46,10 +48,7 @@ struct RouteDetailView: View {
     private func detail(_ saved: SavedRoute, _ route: GPXRoute) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
-                Map(initialPosition: .rect(route.boundingMapRect(padding: 0.12))) {
-                    RouteMapLayers.route(route)
-                }
-                .mapStyle(.halo)
+                routeMap(route)
                 .frame(height: 240)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
@@ -145,6 +144,23 @@ struct RouteDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(verbatim: saved.name)
+        }
+    }
+
+    /// The route on the map engine of Settings: a still MapLibre map, or MapKit's.
+    @ViewBuilder private func routeMap(_ route: GPXRoute) -> some View {
+        if settings.mapEngine == .mapLibre {
+            HaloMapView(layers: layers, content: HaloMapContent(route: route),
+                        move: HaloMapMove(.frame(route.points), animated: false),
+                        interactive: false, allowsPitch: false)
+                .overlay(alignment: .bottomLeading) {
+                    MapAttributionBar(layers: layers).padding(Theme.Space.s)
+                }
+        } else {
+            Map(initialPosition: .rect(route.boundingMapRect(padding: 0.12))) {
+                RouteMapLayers.route(route)
+            }
+            .mapStyle(.halo)
         }
     }
 

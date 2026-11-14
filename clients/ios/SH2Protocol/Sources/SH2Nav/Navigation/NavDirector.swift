@@ -152,9 +152,11 @@ public struct NavDirector: Sendable {
     // MARK: - Per fix
 
     /// `SHDirectionService.onNewLocation` for a GPX ride. `fix.accuracy` = rounded horizontal
-    /// accuracy in metres.
-    public mutating func update(_ fix: NavLocation) -> Result {
-        update(fix, match: nil)
+    /// accuracy in metres; `speed` the fix's ground speed (m/s, nil or negative = unknown), which
+    /// times the notices; `routeShare` how much of the route the rider has covered (0…1), for the
+    /// arrival rule (nil: the original's step-count guard).
+    public mutating func update(_ fix: NavLocation, speed: Double? = nil, routeShare: Double? = nil) -> Result {
+        update(fix, match: nil, speed: speed, routeShare: routeShare)
     }
 
     /// Addition (matched engine): use the matcher for where the rider is. Call before the first fix.
@@ -166,7 +168,8 @@ public struct NavDirector: Sendable {
     /// One fix. With a `match` (matched engine, docs/MAP_MATCHING_SPEC.md §6–§9) the matcher decides
     /// on/off the route, the step and arrival, and `wrongWay` puts the U-turn on the ring; without one,
     /// exactly the official flow.
-    public mutating func update(_ fix: NavLocation, match: NavMatch?, wrongWay: Bool = false) -> Result {
+    public mutating func update(_ fix: NavLocation, match: NavMatch?, wrongWay: Bool = false,
+                                speed: Double? = nil, routeShare: Double? = nil) -> Result {
         var result = Result()
         guard !completed else { return result }
         if guidance == nil {
@@ -180,7 +183,7 @@ public struct NavDirector: Sendable {
         }
         guard var g = guidance else { return result }
 
-        if let match { g.update(fix, match: match) } else { g.update(fix) }
+        if let match { g.update(fix, match: match, speed: speed) } else { g.update(fix, speed: speed) }
         // The Navigation card that `stopNavCommand` refreshes is read from the guidance after this fix,
         // as the original reads the library's display status after `updateState`: the next turn, not
         // the one just completed.
@@ -217,7 +220,7 @@ public struct NavDirector: Sendable {
                 result.arrived = true
             }
             result.commands = wrongWayLayer(result.commands, wrongWay: wrongWay && !completed)
-        } else if !completed, g.hasReachedOrigin, g.hasArrived(at: fix) {
+        } else if !completed, g.hasReachedOrigin, g.hasArrived(at: fix, routeShare: routeShare) {
             result.commands += navigationCompleted()
             result.arrived = true
         }
@@ -287,9 +290,9 @@ public struct NavDirector: Sendable {
         if ds.currentType == .enteredRoundabout { distance = 0 }
         var angle = ds.thisTurn.relativeTurnAngle
         let roundabout = ds.currentType == .enteringRoundabout || ds.currentType == .enteredRoundabout
-        if roundabout, ds.roundaboutAngles.count > 1 {
-            angle = Self.clockwiseGap(ds.roundaboutAngles[0], ds.roundaboutAngles[ds.roundaboutAngles.count - 1])
-        }
+        // The exit to take comes first in `roundaboutAngles` (`RoundaboutExits`); the original read the
+        // gap between Valhalla's first and last exit, which this port never had.
+        if roundabout, let exit = ds.roundaboutAngles.first { angle = exit }
         var text = ds.roundaboutExitStreetName.isEmpty ? ds.deviceInstruction : ds.roundaboutExitStreetName
         if let converted = Self.instructionText(text) { text = converted }
         if let g = guidance, let routed = turnText(g) { text = routed }
@@ -310,7 +313,7 @@ public struct NavDirector: Sendable {
     func gpsCompassResults(_ ds: NavDisplayStatus, _ g: NavGuidance) -> [NavCommand] {
         let text = Self.instructionText(ds.deviceInstruction) ?? ds.deviceInstruction
         if ds.bearing == NavBearing.unknown {
-            return [NavCommand(data: Commands.navPointerStandby(distance: distanceToDestination - 50, text: text,
+            return [NavCommand(data: Commands.navPointerStandby(distance: distanceToDestination - Self.arrivalRadius, text: text,
                                                                 metric: settings.metric,
                                                                 colour: Commands.NavColour.progress(ds.progress)),
                                label: "navPointerStandby")]
@@ -329,7 +332,7 @@ public struct NavDirector: Sendable {
         let metric = settings.metric
         switch ds.currentType {
         case .pointer:
-            cmds.append(NavCommand(data: Commands.navPointer(angle: ds.bearing, distance: distanceToDestination - 50,
+            cmds.append(NavCommand(data: Commands.navPointer(angle: ds.bearing, distance: distanceToDestination - Self.arrivalRadius,
                                                              text: title, metric: metric,
                                                              colour: Commands.NavColour.progress(ds.progress)),
                                    label: "navPointer"))
@@ -353,8 +356,22 @@ public struct NavDirector: Sendable {
                                                       distance: ds.distanceToThisManeuver, text: ds.description,
                                                       metric: metric, colour: Commands.NavColour.warning),
                                    label: "nav"))
-        case .enteringRoundabout, .enteredRoundabout, .none:
-            break                                                     // a GPX has no roundabouts
+        case .enteringRoundabout, .enteredRoundabout:
+            // Addition: a routed roundabout with a known exit (a GPX has none) on the ring's own glyph,
+            // the exits' angles from the entry with the one to take first, blinking once the rider is
+            // in it, and the exit on the OLED (`Commands.roundabout`, `roundaboutOled`).
+            let step = g.steps[min(g.currentStepIndex + 1, g.steps.count - 1)]
+            let exits = ds.roundaboutAngles.isEmpty ? [ds.thisTurn.relativeTurnAngle] : ds.roundaboutAngles
+            let style: Commands.RoundaboutStyle = step.type == NavStepType.roundaboutClockwise ? .clockwise : .counterClockwise
+            let text = turnText(g) ?? Self.instructionText(ds.deviceInstruction) ?? ds.deviceInstruction
+            cmds.append(NavCommand(data: Commands.roundabout(exits: exits, exitNow: ds.currentType == .enteredRoundabout,
+                                                             style: style, exitColour: Self.colour(ds.thisTurn.mode)),
+                                   label: "roundabout"))
+            cmds.append(NavCommand(data: Commands.roundaboutOled(distance: ds.distanceToThisManeuver, text: text,
+                                                                 metric: metric),
+                                   label: "roundaboutOled"))
+        case .none:
+            break
         }
         let track: [UInt8]? = switch sound {
         case .progress: Commands.NavSound.progress
@@ -372,9 +389,14 @@ public struct NavDirector: Sendable {
     /// The routed text for the turn being shown, on the route only (turning onto it keeps
     /// "Turn left/right").
     func turnText(_ g: NavGuidance) -> String? {
-        guard g.offlineStatus == .onPath, g.display.currentType == .angle else { return nil }
+        let shown: Set<NavAnimation> = [.angle, .enteringRoundabout, .enteredRoundabout]
+        guard g.offlineStatus == .onPath, shown.contains(g.display.currentType) else { return nil }
         return turnTexts[g.currentStepIndex + 1]
     }
+
+    /// The OLED's distance to the destination runs out at the arrival radius, as the official's did
+    /// at its 50 m.
+    static let arrivalRadius = Int(TurnTiming.arrivalRadius)
 
     /// `onNavigationCompleted` + `onDestinationReached`: clear the ring, destination sound, the full
     /// green ring with the title, and `navOff` 10 s later.

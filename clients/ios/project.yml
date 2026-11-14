@@ -18,6 +18,12 @@ packages:
   SH2Protocol:
     # Local package: the directory containing Package.swift (this directory).
     path: SH2Protocol
+  # MapLibre Native iOS (BSD-2): the MapLibre map engine, offline maps and route thumbnails
+  # (docs/APP_SPEC.md M17). Pinned to an exact version: no Package.resolved is versioned, as the
+  # .xcodeproj is generated.
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    exactVersion: "7.0.0"
 
 targets:
   SmartHalo2:
@@ -36,6 +42,8 @@ targets:
     dependencies:
       - package: SH2Protocol
         product: SH2Protocol
+      - package: MapLibre
+        product: MapLibre
       # M12: navigation Live Activity / Dynamic Island (embedded in PlugIns/).
       - target: HaloLiveActivity
         embed: true

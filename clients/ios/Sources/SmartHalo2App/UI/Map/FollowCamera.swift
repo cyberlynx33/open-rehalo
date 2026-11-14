@@ -92,10 +92,13 @@ final class FollowCamera: NSObject, ObservableObject {
     /// Resume following from wherever the map is now (after a zoom, or leaving Free): the camera
     /// eases back onto the rider instead of jumping.
     func resume(from live: MapCamera?) {
-        if let live {
-            camCenter = live.centerCoordinate
-            camHeading = live.heading
-        }
+        resume(center: live?.centerCoordinate, heading: live?.heading)
+    }
+
+    /// The same, from a camera that isn't MapKit's (the MapLibre map).
+    func resume(center: CLLocationCoordinate2D?, heading: Double?) {
+        if let center { camCenter = center }
+        if let heading { camHeading = heading }
         paused = false
     }
 
