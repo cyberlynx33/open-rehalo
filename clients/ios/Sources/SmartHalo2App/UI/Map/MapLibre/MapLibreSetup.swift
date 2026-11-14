@@ -9,7 +9,7 @@ enum MapLibreSetup {
     /// OpenFreeMap: "at most 4 parallel requests".
     static let maximumConnectionsPerHost = 4
     /// Ambient cache (tiles seen while browsing), bytes. MapLibre's default is 50 MB.
-    static let ambientCacheBytes: UInt64 = 200 * 1024 * 1024
+    static let ambientCacheBytes: UInt = 200 * 1024 * 1024
 
     private static var configured = false
 
