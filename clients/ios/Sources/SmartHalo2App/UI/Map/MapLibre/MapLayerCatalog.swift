@@ -133,6 +133,25 @@ struct MapLayerSelection: Equatable, RawRepresentable {
         UserDefaults.standard.string(forKey: storageKey).flatMap(MapLayerSelection.init(rawValue:)) ?? MapLayerSelection()
     }
 
+    /// A file that exists only while a selection is being put on a map (`HaloMapView`). A file, not a
+    /// default: it is on disk before the next line runs, even if that line stops the app.
+    static var applyingMarker: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("sh2-map-layers-applying")
+    }
+
+    /// At launch, before any map: the marker still there means the last run stopped while putting the
+    /// overlays on the map. They are turned off, so the Map tab can open again, and the log says why.
+    static func recoverFromInterruptedApply() {
+        let marker = applyingMarker
+        guard FileManager.default.fileExists(atPath: marker.path) else { return }
+        try? FileManager.default.removeItem(at: marker)
+        let selection = stored
+        guard !selection.overlays.isEmpty else { return }
+        UserDefaults.standard.set(MapLayerSelection(base: selection.base).rawValue, forKey: storageKey)
+        LogStore.shared.appendFromAnywhere("MapLibre: the app stopped while drawing the map's layers; they were turned off")
+    }
+
     var base: MapBaseStyle = .night
     var overlays: Set<MapOverlay> = []
 
