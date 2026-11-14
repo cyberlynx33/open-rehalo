@@ -3,10 +3,12 @@
 //   - optional x-consumer-token header on login/signup/refresh and all v2 routes (needs SH2_CONSUMER_TOKEN)
 //   - x-access-token (access_jwt) on authenticated endpoints
 //   - users/update is PUT; checkEmail/forgot return a raw scalar; refresh uses a {data:…} envelope
+// Plus an optional proxy to self-hosted routing engines under /routing/* (see routing.mjs).
 import { createServer } from 'node:http';
 import { sign, verify } from './jwt.mjs';
 import { hashPassword, verifyPassword } from './auth.mjs';
 import { UserStore, publicUser } from './store.mjs';
+import { createRouting } from './routing.mjs';
 
 const ACCESS_TTL = 3600;               // 1 h
 const REFRESH_TTL = 60 * 60 * 24 * 30; // 30 d
@@ -107,7 +109,10 @@ function rideMarker(m, rideId, now) {
   };
 }
 
-export function createApp({ store, secret, consumerToken, requireConsumer = Boolean(consumerToken) } = {}) {
+// `routing`: { brouterUrl, valhallaUrl, auth, timeoutMs, maxResponseBytes } (all optional, see routing.mjs)
+export function createApp({ store, secret, consumerToken, requireConsumer = Boolean(consumerToken), routing = {} } = {}) {
+  const { auth: routingAuth = false, ...routingOpts } = routing;
+  const proxy = createRouting(routingOpts);
   const routes = [];
   const add = (method, pattern, handler, opts = {}) => {
     const keys = [];
@@ -266,6 +271,20 @@ export function createApp({ store, secret, consumerToken, requireConsumer = Bool
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
+
+    // routing proxy: streams its own bodies, so it runs before readBody(); JWT only when SH2_ROUTING_AUTH is on
+    if (proxy.handles(url.pathname)) {
+      if (routingAuth) {
+        const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '')?.[1];
+        const claims = verify(req.headers['x-access-token'] ?? bearer, secret);
+        if (!claims || claims.typ !== 'access' || !store.findById(claims.sub)) {
+          return json(res, 401, { error: 'invalid token' });
+        }
+      }
+      try { return await proxy.handle(req, res, url); }
+      catch (e) { return res.headersSent ? res.destroy() : json(res, 500, { error: String(e?.message || e) }); }
+    }
+
     const route = routes.find((r) => r.method === req.method && r.re.test(url.pathname));
     if (!route) return json(res, 404, { error: 'route not found' });
 

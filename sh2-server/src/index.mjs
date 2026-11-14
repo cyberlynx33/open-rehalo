@@ -14,9 +14,24 @@ if (!secret) {
   else { secret = randomBytes(32).toString('hex'); writeFileSync(sp, secret); }
 }
 
+// optional routing proxy (/routing/*); an unset engine URL answers 503, empty numbers keep the defaults
+const envNum = (k) => (process.env[k] ? Number(process.env[k]) : undefined);
+const routing = {
+  brouterUrl: process.env.SH2_BROUTER_URL || undefined,
+  valhallaUrl: process.env.SH2_VALHALLA_URL || undefined,
+  auth: /^(1|true|yes|on)$/i.test(process.env.SH2_ROUTING_AUTH || ''),   // off by default
+  timeoutMs: envNum('SH2_ROUTING_TIMEOUT_MS'),
+  maxResponseBytes: envNum('SH2_ROUTING_MAX_BYTES'),
+};
+
 const store = new UserStore(`${DATA_DIR}/users.json`);
 const app = createApp({
   store, secret,
   consumerToken: process.env.SH2_CONSUMER_TOKEN || undefined, // optional; unset = header not required
+  routing,
 });
-app.listen(PORT, () => console.log(`sh2-server listening on http://0.0.0.0:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`sh2-server listening on http://0.0.0.0:${PORT}`);
+  const on = ['brouter', 'valhalla'].filter((e) => routing[`${e}Url`]);
+  console.log(`routing proxy: ${on.length ? on.join(', ') : 'no engine configured'}${routing.auth ? ' (JWT required)' : ''}`);
+});
