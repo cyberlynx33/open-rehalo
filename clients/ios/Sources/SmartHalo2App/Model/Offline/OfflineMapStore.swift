@@ -55,6 +55,13 @@ final class OfflineMapStore: ObservableObject {
         var tiles: UInt64
         /// The squares of a corridor (one ring each), for the "downloaded areas" layer.
         var outlines: [[CLLocationCoordinate2D]]
+
+        // CLLocationCoordinate2D isn't Equatable. A pack never changes its geometry, so the outlines
+        // are left out and the other fields tell two snapshots of an area apart.
+        static func == (a: Area, b: Area) -> Bool {
+            a.id == b.id && a.name == b.name && a.kind == b.kind && a.style == b.style && a.state == b.state
+                && a.bytes == b.bytes && a.tiles == b.tiles && a.outlines.count == b.outlines.count
+        }
     }
 
     /// What a pack remembers about itself (`MLNOfflinePack.context`).
@@ -121,7 +128,7 @@ final class OfflineMapStore: ObservableObject {
     private func refresh() {
         let packs = MLNOfflineStorage.shared.packs ?? []
         areas = packs.compactMap(area(for:)).sorted { a, b in
-            if a.kind == .world != (b.kind == .world) { return a.kind != .world }
+            if (a.kind == .world) != (b.kind == .world) { return a.kind != .world }
             return a.name.localizedStandardCompare(b.name) == .orderedAscending
         }
         for pack in packs where pack.state == .unknown { pack.requestProgress() }

@@ -47,7 +47,7 @@ final class PlaceSearch: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     /// A suggestion → its place (coordinate + name).
     func resolve(_ completion: MKLocalSearchCompletion) async throws -> Destination {
         let response = try await MKLocalSearch(request: MKLocalSearch.Request(completion: completion)).start()
-        guard let item = response.mapItems.first else { throw DestinationRouter.RouteError.noRoute }
+        guard let item = response.mapItems.first else { throw RouteError.noRoute }
         let subtitle = completion.subtitle.isEmpty ? nil : completion.subtitle
         return Destination(coordinate: item.placemark.coordinate,
                            name: item.name ?? completion.title, subtitle: subtitle)
