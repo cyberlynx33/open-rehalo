@@ -1,5 +1,11 @@
 # sh2-server — open-source reimplementation of the SmartHalo 2 cloud.
 # Node with no dependencies: uses the official image and mounts the code (no build needed).
+#
+# Optional bike routing engines, each behind a Compose profile (README.md, "Routing engines"):
+#   docker compose up -d                       # sh2-server only, as always
+#   docker compose --profile brouter up -d     # + BRouter (downloads its .rd5 segments first)
+#   docker compose --profile valhalla up -d    # + Valhalla (builds its tiles on the first start)
+# Every setting below has a default; override it in a .env file next to this one (see .env.example).
 services:
   sh2-server:
     image: node:22-alpine
@@ -8,17 +14,118 @@ services:
     command: ["node", "src/index.mjs"]
     environment:
       PORT: "8730"
-      SH2_DATA_DIR: "/data"          # users.json + jwt.secret persist here
-      # SH2_JWT_SECRET: "..."        # optional: set it so tokens survive recreating /data
-      # SH2_CONSUMER_TOKEN: "..."    # optional: require this x-consumer-token header
+      SH2_DATA_DIR: "/data"                           # users.json + jwt.secret persist here
+      SH2_JWT_SECRET: ${SH2_JWT_SECRET:-}             # optional: set it so tokens survive recreating /data
+      SH2_CONSUMER_TOKEN: ${SH2_CONSUMER_TOKEN:-}     # optional: require this x-consumer-token header
+      # Routing proxy, /routing/brouter/* and /routing/valhalla/*. Unset = that engine answers 503.
+      SH2_BROUTER_URL: ${SH2_BROUTER_URL:-}           # http://brouter:17777 with --profile brouter
+      SH2_VALHALLA_URL: ${SH2_VALHALLA_URL:-}         # http://valhalla:8002 with --profile valhalla
+      SH2_ROUTING_AUTH: ${SH2_ROUTING_AUTH:-false}    # true = /routing/* needs the user's access JWT
+      SH2_ROUTING_TIMEOUT_MS: ${SH2_ROUTING_TIMEOUT_MS:-}   # default 120000
+      SH2_ROUTING_MAX_BYTES: ${SH2_ROUTING_MAX_BYTES:-}     # default 16777216 (16 MiB per response)
     volumes:
-      - .:/app:ro                    # code (read-only)
-      - ./data:/data                 # persistent data
+      - .:/app:ro                                     # code (read-only)
+      - ./data:/data                                  # persistent data
     ports:
-      - "8730:8730"
+      - "${SH2_PORT:-8730}:8730"
+    mem_limit: ${SH2_MEM_LIMIT:-256m}                 # the proxy streams, it never holds a whole route
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8730/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # ---- BRouter (--profile brouter) ----
+  # One-shot job: fetches the 5°×5° .rd5 tiles into the segments volume, then exits. Tiles already there
+  # are kept, so later starts download nothing (BROUTER_SEGMENTS_UPDATE=true fetches the changed ones).
+  brouter-segments:
+    profiles: [brouter]
+    image: node:22-alpine
+    working_dir: /app
+    command: ["node", "routing/brouter-segments.mjs"]
+    environment:
+      BROUTER_SEGMENTS_DIR: /segments4
+      BROUTER_BBOX: ${BROUTER_BBOX:-}                 # minLon,minLat,maxLon,maxLat; default: Spain + Balearics
+      BROUTER_TILES: ${BROUTER_TILES:-}               # or explicit tiles, e.g. "W5_N40 E0_N40"
+      BROUTER_SEGMENTS_URL: ${BROUTER_SEGMENTS_URL:-} # default https://brouter.de/brouter/segments4/
+      BROUTER_SEGMENTS_UPDATE: ${BROUTER_SEGMENTS_UPDATE:-false}
+    volumes:
+      - .:/app:ro
+      - ${BROUTER_SEGMENTS_VOLUME:-brouter-segments}:/segments4
+    mem_limit: 128m
+    restart: "no"                                     # one-shot: brouter waits for it to succeed
+
+  brouter:
+    profiles: [brouter]
+    # The newest official image, ghcr.io/abrensch/brouter:v1.7.8, can't read today's segments (lookup
+    # version 11 needs 1.7.9+), and no later release is published as an image. So the official Dockerfile
+    # is built at a release tag, once, on the first `up` (a few minutes; `docker compose build brouter`).
+    image: ${BROUTER_IMAGE:-sh2-brouter:1.7.10}
+    build:
+      context: ${BROUTER_BUILD_CONTEXT:-https://github.com/abrensch/brouter.git#v1.7.10}
+    depends_on:
+      brouter-segments:
+        condition: service_completed_successfully
+    # The image's server.sh fixes 1 thread and a 128 MB heap, so RouteServer is started here instead.
+    # Profiles (trekking, fastbike, gravel, mtb, …) ship in the image under /profiles2. The jar is
+    # $CLASSPATH (/app/brouter.jar) in images built from 1.7.10 on, /brouter.jar in older ones.
+    command:
+      - sh
+      - -c
+      - exec java $$BROUTER_JAVA_OPTS -cp "$${CLASSPATH:-/brouter.jar}" btools.server.RouteServer
+        /segments4 /profiles2 /customprofiles 17777 "$$BROUTER_MAX_THREADS"
+    environment:
+      # SerialGC on 2 CPUs: about half the footprint of the default G1 for a heap this small (README.md).
+      # maxRunningTime (s) stays under the proxy's SH2_ROUTING_TIMEOUT_MS, so an abandoned route stops too.
+      BROUTER_JAVA_OPTS: ${BROUTER_JAVA_OPTS:--Xmx256M -Xms128M -Xmn16M -XX:+UseSerialGC -XX:ActiveProcessorCount=2 -DmaxRunningTime=110 -DuseRFCMimeType=false}
+      BROUTER_MAX_THREADS: ${BROUTER_MAX_THREADS:-2}  # parallel routes; about 128 MB of heap each
+    volumes:
+      - ${BROUTER_SEGMENTS_VOLUME:-brouter-segments}:/segments4:ro
+      - type: tmpfs                                   # profiles uploaded through /brouter/profile
+        target: /customprofiles
+        tmpfs: { size: 16m, mode: 01777 }
+    ports:
+      - "${BROUTER_PORT:-17777}:17777"
+    mem_limit: ${BROUTER_MEM_LIMIT:-512m}             # measured peak about 210 MiB with 2 long routes at once
+    restart: unless-stopped
+    healthcheck:                                      # no curl/wget in the image; RouteServer answers robots.txt
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/17777 && printf 'GET /robots.txt HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q ' 200 ' <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ---- Valhalla (--profile valhalla) ----
+  # The first start downloads the PBF and builds routing tiles, admin/timezone DBs and elevation into the
+  # data volume (Spain: hours, see README.md); later starts load the existing tiles in seconds.
+  valhalla:
+    profiles: [valhalla]
+    image: ${VALHALLA_IMAGE:-ghcr.io/valhalla/valhalla-scripted:3.9.1}
+    environment:
+      tile_urls: ${VALHALLA_PBF_URL:-https://download.geofabrik.de/europe/spain-latest.osm.pbf}
+      server_threads: ${VALHALLA_THREADS:-2}          # build and service threads; fewer = less RAM
+      build_elevation: "True"                         # per-edge grades for bicycle costing, /height
+      build_admins: "True"                            # country access rules, border crossings
+      build_time_zones: "True"
+      build_tar: "True"                               # one indexed tile archive: faster loading
+      use_tiles_ignore_pbf: "True"                    # existing tiles win; rebuild with force_rebuild
+      force_rebuild: ${VALHALLA_FORCE_REBUILD:-False}
+      serve_tiles: "True"
+    volumes:
+      - ${VALHALLA_DATA_VOLUME:-valhalla-data}:/custom_files
+    ports:
+      - "${VALHALLA_PORT:-8002}:8002"
+    mem_limit: ${VALHALLA_MEM_LIMIT:-6g}              # build peak; serving alone needs far less
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8002/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 3h                                # the first build; failures before then don't count
+      start_interval: 30s
+
+volumes:
+  brouter-segments:
+  valhalla-data:
