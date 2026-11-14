@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SH2Protocol
 
 /// The route currently selected on the Map tab (UX_DESIGN §4.2) — the one "▶ NAVEGAR" starts.
 ///
@@ -19,14 +20,18 @@ final class RouteSelection: ObservableObject {
     @Published private(set) var route: GPXRoute?
     /// Where the route came from ("Wikiloc", "Files"…), shown under its name. Optional.
     @Published private(set) var subtitle: String?
+    /// A saved destination's typed steps (`RouteLibrary.routedSteps(for:)`), so riding it again keeps
+    /// its manoeuvres; empty for a GPX.
+    @Published private(set) var routedSteps: [RoutedStep] = []
     /// Set by `select(…, navigate: true)`; the Map tab resets it and starts Navigating.
     @Published var pendingNavigation = false
 
     private init() {}
 
-    func select(_ route: GPXRoute?, subtitle: String? = nil, navigate: Bool = false) {
+    func select(_ route: GPXRoute?, subtitle: String? = nil, steps: [RoutedStep] = [], navigate: Bool = false) {
         self.route = route
         self.subtitle = route == nil ? nil : subtitle
+        routedSteps = route == nil ? [] : steps
         if navigate, route != nil {
             AppRouter.shared.tab = .map
             pendingNavigation = true

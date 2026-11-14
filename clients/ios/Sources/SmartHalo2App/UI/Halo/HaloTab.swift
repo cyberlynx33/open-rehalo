@@ -73,6 +73,8 @@ struct HaloDestination: View {
             RidesView()
                 .navigationTitle("Rides history")
                 .haloListStyle()
+        case .offlineMaps:
+            OfflineMapsView()
         }
     }
 }

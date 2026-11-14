@@ -8908,6 +8908,1043 @@
           }
         }
       }
+    },
+    "%@ Calculated with Apple Maps." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Calculated with Apple Maps."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Calculada con Apple Maps."
+          }
+        }
+      }
+    },
+    "%llu tiles" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu tiles"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu teselas"
+          }
+        }
+      }
+    },
+    "A 1 km corridor around each saved route, zoom 1 to 14, plus the world at zoom 0 and 1 so the map's style, fonts and icons work without a connection." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A 1 km corridor around each saved route, zoom 1 to 14, plus the world at zoom 0 and 1 so the map's style, fonts and icons work without a connection."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un corredor de 1 km alrededor de cada ruta guardada, zoom 1 a 14, más el mundo a zoom 0 y 1 para que el estilo, las fuentes y los iconos del mapa funcionen sin conexión."
+          }
+        }
+      }
+    },
+    "Apple Maps" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Maps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Maps"
+          }
+        }
+      }
+    },
+    "BRouter didn't answer (%@)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BRouter didn't answer (%@)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BRouter no respondió (%@)."
+          }
+        }
+      }
+    },
+    "BRouter needs your position, which isn't known yet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BRouter needs your position, which isn't known yet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BRouter necesita tu posición, que aún no se conoce."
+          }
+        }
+      }
+    },
+    "BRouter server" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BRouter server"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servidor BRouter"
+          }
+        }
+      }
+    },
+    "Base map" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa base"
+          }
+        }
+      }
+    },
+    "Calculated with Apple Maps: no MTB profile, using walking routes." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculated with Apple Maps: no MTB profile, using walking routes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculada con Apple Maps: sin perfil MTB, usando rutas a pie."
+          }
+        }
+      }
+    },
+    "Calculated with Apple Maps: no gravel profile, using City." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculated with Apple Maps: no gravel profile, using City."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculada con Apple Maps: sin perfil gravel, usando Ciudad."
+          }
+        }
+      }
+    },
+    "CyclOSM's cycle routes and lanes. Online only." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CyclOSM's cycle routes and lanes. Online only."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rutas y vías ciclistas de CyclOSM. Solo con conexión."
+          }
+        }
+      }
+    },
+    "Cycle network" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cycle network"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Red ciclista"
+          }
+        }
+      }
+    },
+    "Day" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Día"
+          }
+        }
+      }
+    },
+    "Download the world basics" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download the world basics"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargar lo básico del mundo"
+          }
+        }
+      }
+    },
+    "Downloaded areas" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded areas"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zonas descargadas"
+          }
+        }
+      }
+    },
+    "Downloading · %lld %" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading · %lld %"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando · %lld %"
+          }
+        }
+      }
+    },
+    "Downloads" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloads"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargas"
+          }
+        }
+      }
+    },
+    "Finding a way back…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finding a way back…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscando el camino de vuelta…"
+          }
+        }
+      }
+    },
+    "GPS lost" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPS lost"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPS perdido"
+          }
+        }
+      }
+    },
+    "Gravel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gravel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gravel"
+          }
+        }
+      }
+    },
+    "Layers" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Capas"
+          }
+        }
+      }
+    },
+    "MTB" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MTB"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MTB"
+          }
+        }
+      }
+    },
+    "Map data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Map data"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datos del mapa"
+          }
+        }
+      }
+    },
+    "Map data credits" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Map data credits"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créditos de los datos del mapa"
+          }
+        }
+      }
+    },
+    "Map engine" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Map engine"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Motor de mapa"
+          }
+        }
+      }
+    },
+    "Map layers" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Map layers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Capas del mapa"
+          }
+        }
+      }
+    },
+    "Map tiles by OpenFreeMap (OpenMapTiles, © OpenStreetMap contributors), whose terms allow up to 3,000 tiles or 50 MB per download. Topo, satellite, relief and cycle layers are not saved offline." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Map tiles by OpenFreeMap (OpenMapTiles, © OpenStreetMap contributors), whose terms allow up to 3,000 tiles or 50 MB per download. Topo, satellite, relief and cycle layers are not saved offline."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teselas de OpenFreeMap (OpenMapTiles, © colaboradores de OpenStreetMap), cuyas condiciones permiten hasta 3000 teselas o 50 MB por descarga. Las capas topo, satélite, relieve y ciclista no se guardan sin conexión."
+          }
+        }
+      }
+    },
+    "MapLibre (beta)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MapLibre (beta)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MapLibre (beta)"
+          }
+        }
+      }
+    },
+    "MapLibre draws OpenStreetMap data from OpenFreeMap, with Spain's IGN topo and satellite layers, shaded relief and CyclOSM's cycle network, and can save areas for offline use. The 3D route view stays on Apple Maps." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MapLibre draws OpenStreetMap data from OpenFreeMap, with Spain's IGN topo and satellite layers, shaded relief and CyclOSM's cycle network, and can save areas for offline use. The 3D route view stays on Apple Maps."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MapLibre dibuja datos de OpenStreetMap servidos por OpenFreeMap, con las capas topo y satélite del IGN, relieve sombreado y la red ciclista de CyclOSM, y puede guardar zonas para usarlas sin conexión. La vista 3D de la ruta sigue en Apple Maps."
+          }
+        }
+      }
+    },
+    "Night" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Night"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noche"
+          }
+        }
+      }
+    },
+    "No areas yet. Save a route with the setting above on, or download the world basics." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No areas yet. Save a route with the setting above on, or download the world basics."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay zonas. Guarda una ruta con el ajuste de arriba activado o descarga lo básico del mundo."
+          }
+        }
+      }
+    },
+    "Offline maps" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline maps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapas sin conexión"
+          }
+        }
+      }
+    },
+    "Offline maps work with the MapLibre map engine (Advanced › Map engine)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline maps work with the MapLibre map engine (Advanced › Map engine)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los mapas sin conexión funcionan con el motor MapLibre (Avanzado › Motor de mapa)."
+          }
+        }
+      }
+    },
+    "OpenFreeMap, from OpenStreetMap data." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenFreeMap, from OpenStreetMap data."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenFreeMap, con datos de OpenStreetMap."
+          }
+        }
+      }
+    },
+    "Outlines of the areas saved for offline use." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outlines of the areas saved for offline use."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contorno de las zonas guardadas para usar sin conexión."
+          }
+        }
+      }
+    },
+    "Paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pausa"
+          }
+        }
+      }
+    },
+    "Relief" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relief"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relieve"
+          }
+        }
+      }
+    },
+    "Save the map with each route" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save the map with each route"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar el mapa con cada ruta"
+          }
+        }
+      }
+    },
+    "Saved" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado"
+          }
+        }
+      }
+    },
+    "Shaded relief from Mapterhorn's terrain tiles." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shaded relief from Mapterhorn's terrain tiles."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relieve sombreado con las teselas de terreno de Mapterhorn."
+          }
+        }
+      }
+    },
+    "Spain's aerial orthophoto (IGN PNOA, CC BY 4.0)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spain's aerial orthophoto (IGN PNOA, CC BY 4.0)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ortofoto aérea de España (IGN PNOA, CC BY 4.0)."
+          }
+        }
+      }
+    },
+    "Spain's official topographic map (IGN, CC BY 4.0)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spain's official topographic map (IGN, CC BY 4.0)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa topográfico oficial de España (IGN, CC BY 4.0)."
+          }
+        }
+      }
+    },
+    "Stop %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parada %lld"
+          }
+        }
+      }
+    },
+    "Swipe an area to delete it or download its changes again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe an area to delete it or download its changes again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza una zona para borrarla o volver a descargar sus cambios."
+          }
+        }
+      }
+    },
+    "Take exit %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take exit %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toma la salida %lld"
+          }
+        }
+      }
+    },
+    "The BRouter URL in Settings isn't valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The BRouter URL in Settings isn't valid."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL de BRouter de Ajustes no es válida."
+          }
+        }
+      }
+    },
+    "The base URL of a BRouter server (or a proxy to one, such as your sh2-server's). Routes then use its City, Road, Gravel and MTB profiles with elevation and roundabouts, and a way back is asked for when you leave the route. Empty: routes come from Apple Maps." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The base URL of a BRouter server (or a proxy to one, such as your sh2-server's). Routes then use its City, Road, Gravel and MTB profiles with elevation and roundabouts, and a way back is asked for when you leave the route. Empty: routes come from Apple Maps."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL base de un servidor BRouter (o de un proxy hacia uno, como el de tu sh2-server). Las rutas usan entonces sus perfiles Ciudad, Carretera, Gravel y MTB, con elevación y rotondas, y al salirte de la ruta se le pide un camino de vuelta. Vacía: las rutas vienen de Apple Maps."
+          }
+        }
+      }
+    },
+    "The offline tile limit was reached." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The offline tile limit was reached."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se alcanzó el límite de teselas sin conexión."
+          }
+        }
+      }
+    },
+    "This area is over OpenFreeMap's 50 MB per download and was stopped." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This area is over OpenFreeMap's 50 MB per download and was stopped."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta zona supera los 50 MB por descarga de OpenFreeMap y se ha detenido."
+          }
+        }
+      }
+    },
+    "This build has no Apple bike routes." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This build has no Apple bike routes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta versión no tiene rutas en bici de Apple."
+          }
+        }
+      }
+    },
+    "This download is no longer valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This download is no longer valid."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta descarga ya no es válida."
+          }
+        }
+      }
+    },
+    "Topo IGN" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Topo IGN"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Topo IGN"
+          }
+        }
+      }
+    },
+    "Topo and Satellite only cover Spain and replace each other. The cycle network needs a connection." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Topo and Satellite only cover Spain and replace each other. The cycle network needs a connection."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Topo y Satélite solo cubren España y se sustituyen entre sí. La red ciclista necesita conexión."
+          }
+        }
+      }
+    },
+    "Update" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizar"
+          }
+        }
+      }
+    },
+    "Waiting for Wi-Fi" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for Wi-Fi"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando Wi-Fi"
+          }
+        }
+      }
+    },
+    "Waiting for your position to route from." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for your position to route from."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando tu posición para calcular la ruta."
+          }
+        }
+      }
+    },
+    "Weak GPS" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weak GPS"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPS débil"
+          }
+        }
+      }
+    },
+    "Wi-Fi only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wi-Fi only"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo con Wi-Fi"
+          }
+        }
+      }
+    },
+    "World · Day" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "World · Day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mundo · Día"
+          }
+        }
+      }
+    },
+    "World · Night" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "World · Night"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mundo · Noche"
+          }
+        }
+      }
+    },
+    "BRouter URL" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BRouter URL"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL de BRouter"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
