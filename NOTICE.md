@@ -28,4 +28,17 @@ with or endorsed by SmartHalo or CycleLabs.
 - **Unbounded font:** © The Unbounded Project Authors, SIL Open Font License 1.1. See
   [`site/assets/fonts/OFL.txt`](site/assets/fonts/OFL.txt). The brand SVGs contain its glyph outlines.
 - **Weather data:** [Open-Meteo](https://open-meteo.com/), CC BY 4.0.
-- **Maps:** Apple Maps, under Apple's terms.
+- **Maps:** Apple Maps, under Apple's terms (the default map engine, the 3D route view and search).
+- **MapLibre Native iOS** ([maplibre/maplibre-native](https://github.com/maplibre/maplibre-native)),
+  BSD 2-Clause, © MapLibre contributors; the optional map engine, added as a Swift package.
+- **Map data:** © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, Open Database
+  License (ODbL). Vector tiles and styles by [OpenFreeMap](https://openfreemap.org/) (MIT), from
+  [OpenMapTiles](https://openmaptiles.org/) (© OpenMapTiles).
+- **Topographic map and orthophoto of Spain:** Instituto Geográfico Nacional ([ign.es](https://www.ign.es/)),
+  WMTS services `mapa-raster` (MTN) and `pnoa-ma` (PNOA), CC BY 4.0 (`ign.es`, `scne.es`).
+- **Terrain tiles:** [Mapterhorn](https://mapterhorn.com/), code BSD 3-Clause; the elevation data from the
+  IGN's digital terrain models (CC BY 4.0 scne.es) in Spain and Copernicus GLO-30 elsewhere.
+- **Cycle network overlay:** [CyclOSM](https://www.cyclosm.org/), tiles CC BY-SA 2.0, rendered by
+  OpenStreetMap France under the OSMF tile usage policy (online only).
+- **Routing:** [BRouter](https://github.com/abrensch/brouter), MIT, run on a server of the rider's;
+  nothing of it is shipped with the app.
