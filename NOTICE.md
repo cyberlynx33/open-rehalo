@@ -29,3 +29,20 @@ with or endorsed by SmartHalo or CycleLabs.
   [`site/assets/fonts/OFL.txt`](site/assets/fonts/OFL.txt). The brand SVGs contain its glyph outlines.
 - **Weather data:** [Open-Meteo](https://open-meteo.com/), CC BY 4.0.
 - **Maps:** Apple Maps, under Apple's terms.
+
+## Optional routing engines and map data
+
+`sh2-server/docker-compose.yml` can fetch and run third-party routing software and data (the `brouter`
+and `valhalla` profiles). None of it is part of this repository: it is downloaded when you start those
+services, under its own terms.
+
+- **BRouter**, built from [abrensch/brouter](https://github.com/abrensch/brouter): MIT License.
+- **Valhalla**, the `ghcr.io/valhalla/valhalla-scripted` image from
+  [valhalla/valhalla](https://github.com/valhalla/valhalla): MIT License.
+- **OpenStreetMap data**, in BRouter's segments, in the Geofabrik extracts Valhalla builds from, and in
+  every route computed from them: © OpenStreetMap contributors, under the
+  [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/). Wherever such routes
+  are shown, credit "© OpenStreetMap contributors" ([guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines)).
+- **Elevation data**: BRouter's segments carry heights derived from SRTM; Valhalla downloads the
+  [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) dataset, whose sources ask for
+  [attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md).
